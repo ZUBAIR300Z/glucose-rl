@@ -25,3 +25,9 @@ runs/
 # Office temp / lock files
 ~$*
 *.tmp
+
+# R / RStudio
+.Rhistory
+.RData
+.Rproj.user/
+*.Rproj
