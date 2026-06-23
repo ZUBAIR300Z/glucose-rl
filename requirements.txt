@@ -1,0 +1,16 @@
+# Core scientific stack
+# numpy pinned <2.0: simglucose 0.2.11 (May 2024) predates numpy 2.0 and can
+# break on it. 1.26.4 is the last 1.x release and is widely compatible.
+numpy<2.0
+scipy
+pandas
+matplotlib
+
+# RL environment + algorithms
+gymnasium>=0.29,<1.1
+simglucose==0.2.11
+stable-baselines3>=2.3,<3.0
+
+# Deep learning backend (CPU build is fine to start; see README for GPU notes)
+torch
+tensorboard
