@@ -134,14 +134,38 @@ def main():
 
     # ---- summary table ----
     n = len(args.patients) * args.seeds
-    print(f"\n{'='*64}\nMEAN +/- STD over {n} runs "
-          f"({len(args.patients)} patients x {args.seeds} seeds)\n{'='*64}")
-    print(f"{'Controller':<12}{'Time-in-Range':>18}{'Time hypo':>14}{'Survived':>11}")
+    print(f"\n{'='*78}\nMEAN +/- STD over {n} runs "
+          f"({len(args.patients)} patients x {args.seeds} seeds)\n{'='*78}")
+    print(f"{'Controller':<12}{'TIR 70-180':>14}{'TBR <70':>12}{'TAR >180':>12}"
+          f"{'mean BG':>9}{'surv':>7}")
     for ctrl in controllers:
         tir_m, tir_s = aggregate(rows, ctrl, "time_in_range_pct")
-        hyp_m, hyp_s = aggregate(rows, ctrl, "time_hypo_pct")
+        tbr_m, tbr_s = aggregate(rows, ctrl, "time_hypo_pct")
+        tar_m, tar_s = aggregate(rows, ctrl, "time_hyper_pct")
+        bg_m, _ = aggregate(rows, ctrl, "mean_bg")
         surv = 100.0 * np.mean([r["survived"] for r in rows if r["controller"] == ctrl])
-        print(f"{LABELS[ctrl]:<12}{tir_m:7.1f} +/- {tir_s:4.1f} %{hyp_m:7.1f} +/-{hyp_s:4.1f}%{surv:9.0f}%")
+        print(f"{LABELS[ctrl]:<12}{tir_m:6.1f}±{tir_s:<4.1f}{tbr_m:7.1f}±{tbr_s:<3.1f}"
+              f"{tar_m:7.1f}±{tar_s:<3.1f}{bg_m:9.0f}{surv:6.0f}%")
+
+    # ---- paired significance test: SAC vs PID on TIR (same patient+seed pairs) ----
+    if "sac" in controllers:
+        try:
+            from scipy.stats import wilcoxon
+            k = lambda r: (r["patient"], r["seed"])
+            sac = {k(r): r["time_in_range_pct"] for r in rows if r["controller"] == "sac"}
+            pid = {k(r): r["time_in_range_pct"] for r in rows if r["controller"] == "pid"}
+            common = sorted(set(sac) & set(pid))
+            diffs = np.array([sac[c] - pid[c] for c in common])
+            if len(common) >= 6 and np.any(diffs != 0):
+                _, pval = wilcoxon(diffs)
+                verdict = "SAC > PID" if np.median(diffs) > 0 else "PID > SAC"
+                print(f"\nPaired Wilcoxon SAC vs PID (TIR, n={len(common)}): "
+                      f"median diff {np.median(diffs):+.1f} pts, p={pval:.3f} "
+                      f"({verdict if pval < 0.05 else 'not significant'})")
+            else:
+                print(f"\n(significance test needs >=6 paired, non-tied samples; have {len(common)})")
+        except Exception as e:
+            print(f"\n(significance test skipped: {e})")
 
     # ---- bar chart ----
     means = [aggregate(rows, c, "time_in_range_pct")[0] for c in controllers]

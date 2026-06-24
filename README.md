@@ -43,21 +43,33 @@ UVA/Padova Type-1 Diabetes simulator.**
 
 ## Key Results {#key-results}
 
-> Evaluated on virtual patient `adolescent#001`, mean ± std over 5
-> random meal scenarios. One simulated day per run (480 control steps at
-> 3-minute resolution).
+> **Single-patient result** on `adolescent#001` (the patient the agent was
+> trained on): mean ± std over 5 random meal scenarios, one simulated day
+> (480 control steps at 3-minute resolution) each.
 
-| Controller | Time in Range ↑ | Time Hypoglycemic ↓ | Survived full day |
+| Controller | Time in Range ↑ | Time Below Range (hypo) ↓ | Survived |
 |------------------|------------------|------------------|------------------|
 | Random insulin | 57.6% ± 1.6 | 42.4% | 0% |
 | PID baseline | 84.0% ± 3.5 | 0.0% | 100% |
-| SAC — naive action space *(failed)* | 53.3% ± 17.1 | 46.7% | 0% |
-| **GlucoRL (SAC, corrected)** | ***pending final run*** | ***pending*** | ***pending*** |
+| SAC — naive `[0,30]` action space *(failed)* | 53.3% ± 17.1 | 46.7% | 0% |
+| **GlucoRL (SAC, corrected)** | **92.3% ± 4.2** | 6.2% ± 5.2 | 100% |
 
-![Time in Range comparison](docs/benchmark_tir.png)
+> **Important caveat — this does not generalize (yet).** The result above is
+> on the *training* patient. Evaluated across three patients
+> (adolescent/adult/child #001), GlucoRL averages **59.6% TIR vs the PID's
+> 63.2%**, and produces unsafe hypoglycemia on the unseen child patient
+> (~58% time-below-range). The agent **overfits to its training patient**.
+> Honest takeaway: *the method works, but single-patient training does not
+> produce a controller that transfers* — which is exactly what the
+> multi-patient study (below / Roadmap) is built to address. Note also that
+> 6.2% time-below-range already exceeds the clinical safety target (<4%), so
+> GlucoRL is **not yet a safe controller**, even on its training patient.
 
-*The learning curve and the GlucoRL-vs-PID trajectory comparison are
-added once the final training run completes.*
+![Cross-patient Time-in-Range: SAC vs PID vs Random](docs/benchmark_tir.png)
+
+*Across three patients (including an unseen child), SAC (~60% TIR) does
+**not** beat the PID (~63%) — the single-patient win does not transfer.
+Closing this gap is the goal of the multi-patient study.*
 
 ## Why This Problem Is Hard {#why-this-problem-is-hard}
 
@@ -107,9 +119,10 @@ dosing is continuous, which rules out value-only methods like DQN.
 
 **From-scratch implementation** (`diabetes_rl/sac_scratch.py`). SAC is
 *also* implemented from scratch in PyTorch (squashed-Gaussian policy,
-twin critics, automatic entropy tuning, polyak target updates) and
-validated against the Stable-Baselines3 version, to demonstrate
-understanding of the algorithm internals rather than just library usage.
+twin critics, automatic entropy tuning, polyak target updates) to
+demonstrate understanding of the algorithm internals rather than just
+library usage. *(A head-to-head validation that it matches the
+Stable-Baselines3 version is planned — see Roadmap; not yet run.)*
 
 **Baseline.** A correction-only PID controller
 (`diabetes_rl/baselines.py`) that observes the same CGM signal as the
@@ -142,7 +155,8 @@ fails is as important as training one that works.
 ```         
 diabetes_rl/                  reusable package
 ├── envs.py                   simglucose Gymnasium env registration + factory
-├── wrappers.py               GlucoseTrendWrapper (state + action scaling)
+├── wrappers.py               trend state, action scaling, patient resampling, env factory
+├── cohorts.py                patient cohorts + held-out train/test splits
 ├── rewards.py                asymmetric reward functions (Magni, zone)
 ├── baselines.py              PID controller
 ├── metrics.py                glycemic metrics (Time-in-Range, etc.)
@@ -150,10 +164,11 @@ diabetes_rl/                  reusable package
 scripts/
 ├── check_env.py              environment sanity check (random policy)
 ├── pid_baseline.py           run + plot the PID baseline
-├── train_sac.py              train SAC (Stable-Baselines3, parallel envs, checkpoints)
+├── train_sac.py              train SAC (single patient; parallel envs, checkpoints)
+├── train_pooled.py           pooled multi-patient training, held-out model selection
 ├── train_scratch.py          train the from-scratch SAC
 ├── evaluate.py               agent vs PID, head-to-head plot
-├── benchmark.py              multi-patient × multi-seed benchmark (table + chart + CSV)
+├── benchmark.py              multi-patient × multi-seed benchmark (+ significance test)
 └── plot_training.py          learning curve from the eval logs
 docs/                         figures and the methods deep-dive
 requirements.txt              dependencies
@@ -192,6 +207,10 @@ python scripts/plot_training.py
 # 5. Benchmark agent vs PID vs random (multi-patient, multi-seed)
 python scripts/benchmark.py --model models/best/best_model --seeds 5
 
+# 6. Generalization study: pooled training (24 train / 6 held-out patients),
+#    then benchmark on the HELD-OUT set (train_pooled.py prints the exact command)
+python scripts/train_pooled.py --timesteps 500000 --n-envs 6 --seed 0
+
 # Optional: watch training live
 tensorboard --logdir logs
 ```
@@ -204,7 +223,8 @@ tensorboard --logdir logs
 -   [x] From-scratch SAC implementation in PyTorch
 -   [x] Rigorous multi-patient × multi-seed benchmark harness
 -   [x] Diagnosed & fixed the action-space failure mode
--   [ ] Final trained agent that beats the PID baseline
+-   [x] Agent beats PID on its *training* patient (92% vs 84% TIR) — but
+    overfits to unseen patients (documented above)
 -   [ ] Reward ablation (Magni vs interpretable zone reward)
 -   [ ] State ablation (with vs without trend history)
 -   [ ] Cross-patient generalization (train on a subset, test on unseen
