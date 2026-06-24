@@ -144,8 +144,8 @@ def main():
         tar_m, tar_s = aggregate(rows, ctrl, "time_hyper_pct")
         bg_m, _ = aggregate(rows, ctrl, "mean_bg")
         surv = 100.0 * np.mean([r["survived"] for r in rows if r["controller"] == ctrl])
-        print(f"{LABELS[ctrl]:<12}{tir_m:6.1f}±{tir_s:<4.1f}{tbr_m:7.1f}±{tbr_s:<3.1f}"
-              f"{tar_m:7.1f}±{tar_s:<3.1f}{bg_m:9.0f}{surv:6.0f}%")
+        print(f"{LABELS[ctrl]:<12}{tir_m:6.1f}+/-{tir_s:<4.1f}{tbr_m:7.1f}+/-{tbr_s:<3.1f}"
+              f"{tar_m:7.1f}+/-{tar_s:<3.1f}{bg_m:9.0f}{surv:6.0f}%")
 
     # ---- paired significance test: SAC vs PID on TIR (same patient+seed pairs) ----
     if "sac" in controllers:
