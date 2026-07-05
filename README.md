@@ -43,32 +43,34 @@ UVA/Padova Type-1 Diabetes simulator.**
 
 ## Key Results {#key-results}
 
-> **Single-patient result** on `adolescent#001` (the patient the agent was
-> trained on): mean ± std over 5 random meal scenarios, one simulated day
-> (480 control steps at 3-minute resolution) each.
+> **Single-patient result** on `adolescent#001` (the patient the agent
+> was trained on): mean ± std over 5 random meal scenarios, one
+> simulated day (480 control steps at 3-minute resolution) each.
 
 | Controller | Time in Range ↑ | Time Below Range (hypo) ↓ | Survived |
-|------------------|------------------|------------------|------------------|
+|----|----|----|----|
 | Random insulin | 57.6% ± 1.6 | 42.4% | 0% |
 | PID baseline | 84.0% ± 3.5 | 0.0% | 100% |
 | SAC — naive `[0,30]` action space *(failed)* | 53.3% ± 17.1 | 46.7% | 0% |
 | **GlucoRL (SAC, corrected)** | **92.3% ± 4.2** | 6.2% ± 5.2 | 100% |
 
-> **Important caveat — this does not generalize (yet).** The result above is
-> on the *training* patient. Evaluated across three patients
-> (adolescent/adult/child #001), GlucoRL averages **59.6% TIR vs the PID's
-> 63.2%**, and produces unsafe hypoglycemia on the unseen child patient
-> (~58% time-below-range). The agent **overfits to its training patient**.
-> Honest takeaway: *the method works, but single-patient training does not
-> produce a controller that transfers* — which is exactly what the
-> multi-patient study (below / Roadmap) is built to address. Note also that
-> 6.2% time-below-range already exceeds the clinical safety target (<4%), so
-> GlucoRL is **not yet a safe controller**, even on its training patient.
+> **Important caveat — this does not generalize (yet).** The result
+> above is on the *training* patient. Evaluated across three patients
+> (adolescent/adult/child #001), GlucoRL averages **59.6% TIR vs the
+> PID's 63.2%**, and produces unsafe hypoglycemia on the unseen child
+> patient (\~58% time-below-range). The agent **overfits to its training
+> patient**. Honest takeaway: *the method works, but single-patient
+> training does not produce a controller that transfers* — which is
+> exactly what the multi-patient study (below / Roadmap) is built to
+> address. Note also that 6.2% time-below-range already exceeds the
+> clinical safety target (\<4%), so GlucoRL is **not yet a safe
+> controller**, even on its training patient.
 
-![Cross-patient Time-in-Range: SAC vs PID vs Random](docs/benchmark_tir.png)
+![Cross-patient Time-in-Range: SAC vs PID vs
+Random](docs/benchmark_tir.png)
 
-*Across three patients (including an unseen child), SAC (~60% TIR) does
-**not** beat the PID (~63%) — the single-patient win does not transfer.
+*Across three patients (including an unseen child), SAC (\~60% TIR) does
+**not** beat the PID (\~63%) — the single-patient win does not transfer.
 Closing this gap is the goal of the multi-patient study.*
 
 ## Why This Problem Is Hard {#why-this-problem-is-hard}
@@ -90,7 +92,7 @@ Blood glucose is a delayed, noisy, and **asymmetric** control problem:
 ## Problem Formulation (MDP) {#problem-formulation-mdp}
 
 | Element | Definition |
-|------------------------------------|------------------------------------|
+|----|----|
 | **State** | Last 4 CGM readings + last 4 insulin doses (8-dim), exposing glucose *trend* and *insulin-on-board* |
 | **Action** | Basal insulin rate, continuous, in a clinically-scaled range `[0, 0.1]` U |
 | **Reward** | Negative Magni glycemic risk (asymmetric — penalizes lows much harder than highs), with a terminal penalty for crashing the patient |
