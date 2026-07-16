@@ -19,7 +19,7 @@ UVA/Padova Type-1 Diabetes simulator.**
 
 ------------------------------------------------------------------------
 
-> **Scope, stated honestly.** This project does **not** cure diabetes —
+> This project does **not** cure diabetes —
 > a cure is a biological problem. It builds an **automated
 > glucose-control / insulin-dosing** controller (an "artificial
 > pancreas" policy), a real and active research area where reinforcement
