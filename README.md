@@ -274,6 +274,10 @@ tensorboard --logdir logs
 A detailed code/architecture deep-dive is in
 [`Glucose_RL_Pipeline_Deep_Dive.docx`](Glucose_RL_Pipeline_Deep_Dive.docx).
 
+## Author {#author}
+
+**Zubair Malik** — Master of Data Science, Monash University, Melbourne.
+
 ## License {#license}
 
 MIT — see [LICENSE](LICENSE).
