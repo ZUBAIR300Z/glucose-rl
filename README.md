@@ -1,10 +1,5 @@
----
-editor_options: 
-  markdown: 
-    wrap: 72
----
+<div align="center">
 
-::: {align="center"}
 # GlucoRL — Reinforcement Learning for Automated Insulin Dosing
 
 **A deep reinforcement learning agent that learns to dose insulin to
@@ -15,7 +10,8 @@ UVA/Padova Type-1 Diabetes simulator.**
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.12-ee4c2c.svg)
 ![Stable-Baselines3](https://img.shields.io/badge/Stable--Baselines3-2.9-brightgreen.svg)
 ![License](https://img.shields.io/badge/license-MIT-green.svg)
-:::
+
+</div>
 
 ------------------------------------------------------------------------
 
@@ -41,7 +37,7 @@ UVA/Padova Type-1 Diabetes simulator.**
 -   [References & Acknowledgements](#references--acknowledgements)
 -   [License](#license)
 
-## Key Results {#key-results}
+## Key Results
 
 ### Headline: multi-patient generalization study
 
@@ -94,7 +90,7 @@ step of the progression *single patient → held-out patients → multiple
 seeds* strips away more of the illusion. **Only the last row of that
 progression is trustworthy**, and it is reported above.
 
-## Why This Problem Is Hard {#why-this-problem-is-hard}
+## Why This Problem Is Hard
 
 Blood glucose is a delayed, noisy, and **asymmetric** control problem:
 
@@ -110,7 +106,7 @@ Blood glucose is a delayed, noisy, and **asymmetric** control problem:
 -   **Sensor noise.** The agent sees a noisy CGM signal, not the true
     blood glucose.
 
-## Problem Formulation (MDP) {#problem-formulation-mdp}
+## Problem Formulation (MDP)
 
 | Element | Definition |
 |----|----|
@@ -120,7 +116,7 @@ Blood glucose is a delayed, noisy, and **asymmetric** control problem:
 | **Transition** | The simglucose UVA/Padova physiological ODE model |
 | **Discount** | γ = 0.99 (≈ 5-hour effective planning horizon) |
 
-## Approach {#approach}
+## Approach
 
 **Environment.** [simglucose](https://github.com/jxx123/simglucose), an
 open-source implementation of the FDA-accepted UVA/Padova T1D simulator,
@@ -173,7 +169,7 @@ This before/after is documented with figures in [`docs/`](docs/) and is,
 deliberately, part of the project's story: identifying *why* a model
 fails is as important as training one that works.
 
-## Project Structure {#project-structure}
+## Project Structure
 
 ```         
 diabetes_rl/                  reusable package
@@ -198,7 +194,7 @@ requirements.txt              dependencies
 requirements-lock.txt         exact pinned versions (reproducibility)
 ```
 
-## Installation {#installation}
+## Installation
 
 Requires [Anaconda/Miniconda](https://docs.conda.io/). Tested on Windows
 with Python 3.11.
@@ -212,33 +208,41 @@ pip install -r requirements.txt
 For exact reproducibility, use the pinned versions:
 `pip install -r requirements-lock.txt`.
 
-## Reproducing the Results {#reproducing-the-results}
+## Reproducing the Results
 
 ``` bash
 # 1. Sanity-check the environment (random policy)
+
 python scripts/check_env.py
 
 # 2. Run the PID baseline
+
 python scripts/pid_baseline.py
 
 # 3. Train the agent (parallel envs; checkpoints + best-model saving)
+
 python scripts/train_sac.py --timesteps 200000 --n-envs 6
 
 # 4. Plot the learning curve
+
 python scripts/plot_training.py
 
 # 5. Benchmark agent vs PID vs random (multi-patient, multi-seed)
+
 python scripts/benchmark.py --model models/best/best_model --seeds 5
 
 # 6. Generalization study: pooled training (24 train / 6 held-out patients),
+
 #    then benchmark on the HELD-OUT set (train_pooled.py prints the exact command)
+
 python scripts/train_pooled.py --timesteps 500000 --n-envs 6 --seed 0
 
 # Optional: watch training live
+
 tensorboard --logdir logs
 ```
 
-## Roadmap {#roadmap}
+## Roadmap
 
 -   [x] Gymnasium environment, state/reward engineering, PID baseline
 -   [x] SAC training pipeline (parallel envs, checkpointing, best-model
@@ -274,17 +278,19 @@ tensorboard --logdir logs
 A detailed code/architecture deep-dive is in
 [`Glucose_RL_Pipeline_Deep_Dive.docx`](Glucose_RL_Pipeline_Deep_Dive.docx).
 
-## Author {#author}
+## Author
 
 **Zubair Malik** — Master of Data Science, Monash University, Melbourne.
 
-## License {#license}
+## License
 
 MIT — see [LICENSE](LICENSE).
 
 ------------------------------------------------------------------------
 
-::: {align="center"}
+<div align="center">
+
 <sub>Built as a portfolio project exploring reinforcement learning for
 healthcare control problems.</sub>
-:::
+
+</div>
