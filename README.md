@@ -43,35 +43,56 @@ UVA/Padova Type-1 Diabetes simulator.**
 
 ## Key Results {#key-results}
 
-> **Single-patient result** on `adolescent#001` (the patient the agent
-> was trained on): mean ± std over 5 random meal scenarios, one
-> simulated day (480 control steps at 3-minute resolution) each.
+### Headline: multi-patient generalization study
+
+The trustworthy result. Trained on **24 patients**, evaluated on **6
+held-out (never-seen) patients**, across **3 independent training seeds** ×
+5 random meal scenarios each — 90 simulated evaluation days per controller.
+
+| Controller | Time in Range ↑ | Time Below Range (hypo) ↓ | Survived |
+|----|----|----|----|
+| Random insulin | 54.6% | 44.6% | 0% |
+| **PID baseline** | 54.5% ± 15.3 | **11.2%** | **73%** |
+| **GlucoRL (pooled SAC)** | 55.3% ± 16.0 | 23.0% | 57% |
+
+![Multi-seed generalization study](docs/study_results.png)
+
+**Honest finding: GlucoRL does *not* beat the PID.** It *ties* on
+Time-in-Range (55% vs 54% — well inside the ±16 variance) and is **worse on
+safety**: roughly double the hypoglycemia (23% vs 11%) and more crashes
+(57% vs 73% survival).
+
+The dominant effect is **training-seed variance**:
+
+| SAC training seed | Time in Range | Hypo (TBR) | Survived |
+|----|----|----|----|
+| seed 0 | 62.6% | 5.8% | 90% |
+| seed 1 | 52.1% | 32.5% | 47% |
+| seed 2 | 51.2% | 30.9% | 33% |
+
+One seed produced a genuinely good, *safe* controller; two produced unsafe
+ones. **Seed 0 alone would have supported a confident "SAC beats PID and is
+safer" claim — and that claim would have been wrong.** Reporting all three
+is the point. Making the good seed *reproducible* (variance reduction + a
+stronger hypoglycemia penalty) is the next piece of work.
+
+### The development story (why the single-patient number is misleading)
+
+Trained *and* evaluated on **one** patient (`adolescent#001`), GlucoRL looks
+excellent — which is precisely the trap this project documents:
 
 | Controller | Time in Range ↑ | Time Below Range (hypo) ↓ | Survived |
 |----|----|----|----|
 | Random insulin | 57.6% ± 1.6 | 42.4% | 0% |
 | PID baseline | 84.0% ± 3.5 | 0.0% | 100% |
 | SAC — naive `[0,30]` action space *(failed)* | 53.3% ± 17.1 | 46.7% | 0% |
-| **GlucoRL (SAC, corrected)** | **92.3% ± 4.2** | 6.2% ± 5.2 | 100% |
+| GlucoRL (SAC, corrected) | **92.3% ± 4.2** | 6.2% ± 5.2 | 100% |
 
-> **Important caveat — this does not generalize (yet).** The result
-> above is on the *training* patient. Evaluated across three patients
-> (adolescent/adult/child #001), GlucoRL averages **59.6% TIR vs the
-> PID's 63.2%**, and produces unsafe hypoglycemia on the unseen child
-> patient (\~58% time-below-range). The agent **overfits to its training
-> patient**. Honest takeaway: *the method works, but single-patient
-> training does not produce a controller that transfers* — which is
-> exactly what the multi-patient study (below / Roadmap) is built to
-> address. Note also that 6.2% time-below-range already exceeds the
-> clinical safety target (\<4%), so GlucoRL is **not yet a safe
-> controller**, even on its training patient.
-
-![Cross-patient Time-in-Range: SAC vs PID vs
-Random](docs/benchmark_tir.png)
-
-*Across three patients (including an unseen child), SAC (\~60% TIR) does
-**not** beat the PID (\~63%) — the single-patient win does not transfer.
-Closing this gap is the goal of the multi-patient study.*
+92% Time-in-Range on the training patient — but it **overfits**, and 6.2%
+time-below-range already exceeds the clinical safety target (**\<4%**). Each
+step of the progression *single patient → held-out patients → multiple
+seeds* strips away more of the illusion. **Only the last row of that
+progression is trustworthy**, and it is reported above.
 
 ## Why This Problem Is Hard {#why-this-problem-is-hard}
 
@@ -227,10 +248,15 @@ tensorboard --logdir logs
 -   [x] Diagnosed & fixed the action-space failure mode
 -   [x] Agent beats PID on its *training* patient (92% vs 84% TIR) — but
     overfits to unseen patients (documented above)
+-   [x] Cross-patient generalization study: pooled training on 24
+    patients, held-out evaluation on 6 unseen patients × 3 training seeds
+    — result: ties PID on Time-in-Range, worse on hypoglycemia, high
+    seed variance (documented above)
+-   [ ] **Reduce training-seed variance** and cut hypoglycemia (stronger
+    hypo penalty / `zone` reward) so the seed-0 quality is reproducible
 -   [ ] Reward ablation (Magni vs interpretable zone reward)
 -   [ ] State ablation (with vs without trend history)
--   [ ] Cross-patient generalization (train on a subset, test on unseen
-    patients)
+-   [ ] Stronger baselines (tuned PID, basal-bolus) + PPO/TD3 comparison
 -   [ ] Validate from-scratch SAC matches Stable-Baselines3
 
 ## References & Acknowledgements
