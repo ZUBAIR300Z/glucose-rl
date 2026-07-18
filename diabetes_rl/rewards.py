@@ -42,6 +42,24 @@ def magni_reward(BG_last_hour) -> float:
     return -magni_risk(BG_last_hour[-1])
 
 
+HYPO_WEIGHT = 3.0  # extra multiplier on the risk of readings below TARGET_LOW
+
+
+def magni_hypo_reward(BG_last_hour) -> float:
+    """Magni risk with the hypoglycemia region penalized ``HYPO_WEIGHT`` x harder.
+
+    The plain Magni curve already grows faster toward lows, but our pooled agents
+    still over-dose into hypoglycemia on 2 of 3 seeds. Multiplying the risk below
+    70 mg/dL makes a low unambiguously the worst place to be, which should
+    discourage the over-dosing that drives the seed-to-seed variance.
+    """
+    bg = float(BG_last_hour[-1])
+    risk = magni_risk(bg)
+    if bg < TARGET_LOW:
+        risk *= HYPO_WEIGHT
+    return -risk
+
+
 def zone_reward(BG_last_hour) -> float:
     """Interpretable asymmetric piecewise reward.
 
@@ -62,5 +80,6 @@ def zone_reward(BG_last_hour) -> float:
 # Convenient lookup so scripts can select a reward by name.
 REWARD_FUNCTIONS = {
     "magni": magni_reward,
+    "magni_hypo": magni_hypo_reward,
     "zone": zone_reward,
 }

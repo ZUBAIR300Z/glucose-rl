@@ -43,13 +43,20 @@ def main():
     p.add_argument("--timesteps", type=int, default=500_000)
     p.add_argument("--n-envs", type=int, default=6)
     p.add_argument("--holdout-per-cohort", type=int, default=2)
+    p.add_argument("--reward", default="magni")
+    p.add_argument("--learning-rate", type=float, default=3e-4)
+    p.add_argument("--tag", default="default",
+                   help="experiment name; models + results are namespaced by it")
     p.add_argument("--eval-freq", type=int, default=25_000)
     p.add_argument("--benchmark-seeds", type=int, default=5)
     p.add_argument("--skip-train", action="store_true")
     args = p.parse_args()
 
-    os.makedirs(STUDY_DIR, exist_ok=True)
+    study_dir = os.path.join(STUDY_DIR, args.tag)
+    pooled_dir = os.path.join(POOLED, args.tag)
+    os.makedirs(study_dir, exist_ok=True)
     _, test_patients = stratified_holdout(args.holdout_per_cohort, seed=0)
+    print(f"[tag={args.tag}] reward={args.reward}  lr={args.learning_rate}")
     print(f"Held-out test patients ({len(test_patients)}): {test_patients}")
 
     frames = []
@@ -58,9 +65,10 @@ def main():
             run([PY, os.path.join(ROOT, "scripts", "train_pooled.py"),
                  "--timesteps", args.timesteps, "--n-envs", args.n_envs,
                  "--holdout-per-cohort", args.holdout_per_cohort,
-                 "--eval-freq", args.eval_freq, "--seed", s])
+                 "--reward", args.reward, "--learning-rate", args.learning_rate,
+                 "--tag", args.tag, "--eval-freq", args.eval_freq, "--seed", s])
 
-        best = os.path.join(POOLED, f"best_seed{s}", "best_model")
+        best = os.path.join(pooled_dir, f"best_seed{s}", "best_model")
         if not os.path.exists(best + ".zip"):
             print(f"!! no model for seed {s} at {best}.zip -- skipping")
             continue
@@ -69,7 +77,7 @@ def main():
              "--model", best, "--patients", *test_patients,
              "--seeds", args.benchmark_seeds])
 
-        dst = os.path.join(STUDY_DIR, f"seed{s}.csv")
+        dst = os.path.join(study_dir, f"seed{s}.csv")
         shutil.copyfile(os.path.join(ROOT, "results", "benchmark.csv"), dst)
         df = pd.read_csv(dst)
         df["train_seed"] = s
@@ -79,7 +87,7 @@ def main():
         sys.exit("No results to aggregate (no trained models found).")
 
     allrows = pd.concat(frames, ignore_index=True)
-    allrows.to_csv(os.path.join(STUDY_DIR, "all_runs.csv"), index=False)
+    allrows.to_csv(os.path.join(study_dir, "all_runs.csv"), index=False)
 
     n_seeds = allrows["train_seed"].nunique()
     print(f"\n{'='*72}\nGENERALIZATION STUDY -- HELD-OUT patients "
@@ -109,7 +117,7 @@ def main():
     except Exception as e:
         print(f"\n(significance test skipped: {e})")
 
-    print(f"\nSaved: {os.path.join(STUDY_DIR, 'all_runs.csv')}")
+    print(f"\nSaved: {os.path.join(study_dir, 'all_runs.csv')}")
 
 
 if __name__ == "__main__":
