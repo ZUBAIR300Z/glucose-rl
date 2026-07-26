@@ -28,16 +28,22 @@ CTRLS = ["random", "pid", "sac"]
 LBL = {"random": "Random", "pid": "PID", "sac": "SAC"}
 
 
-def load():
-    files = sorted(glob.glob(os.path.join(STUDY, "seed*.csv")))
+def load(study_dir):
+    files = sorted(glob.glob(os.path.join(study_dir, "seed*.csv")))
     if not files:
-        sys.exit("No results/study/seed*.csv found — run scripts/run_study.py first.")
+        sys.exit(f"No seed*.csv in {study_dir} — run scripts/run_study.py first.")
     frames = [pd.read_csv(f).assign(train_seed=int(os.path.basename(f)[4:-4])) for f in files]
     return pd.concat(frames, ignore_index=True)
 
 
 def main():
-    df = load()
+    import argparse
+    p = argparse.ArgumentParser(description=__doc__)
+    p.add_argument("--tag", default="", help="experiment subfolder under results/study/")
+    p.add_argument("--out", default=os.path.join(DOCS, "study_results.png"))
+    args = p.parse_args()
+
+    df = load(os.path.join(STUDY, args.tag) if args.tag else STUDY)
     os.makedirs(DOCS, exist_ok=True)
     n_seeds = df.train_seed.nunique()
     fig, axes = plt.subplots(1, 3, figsize=(16, 5))
@@ -89,7 +95,7 @@ def main():
     ax.legend(fontsize=8); ax.grid(axis="y", alpha=0.2)
 
     fig.tight_layout()
-    out = os.path.join(DOCS, "study_results.png")
+    out = args.out
     fig.savefig(out, dpi=120)
     print(f"saved {out}  ({n_seeds} seeds, {df.patient.nunique()} held-out patients)")
 
