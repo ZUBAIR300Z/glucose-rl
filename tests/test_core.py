@@ -1,0 +1,180 @@
+"""Fast checks for the env plumbing, splits, safety shield and metrics.
+
+Run from the project root:  python -m pytest -q
+(A few tests step the simulator for a couple of simulated hours; the whole
+file takes well under a minute.)
+"""
+from __future__ import annotations
+
+import os
+import sys
+import warnings
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+warnings.filterwarnings("ignore")
+
+import numpy as np
+import pytest
+
+from diabetes_rl.baselines import BasalBolusController, BasalController
+from diabetes_rl.cohorts import ALL_PATIENTS, stratified_holdout, train_val_test_split
+from diabetes_rl.envs import make_env
+from diabetes_rl.metrics import glycemic_metrics
+from diabetes_rl.patients import basal_rate
+from diabetes_rl.rewards import REWARD_FUNCTIONS
+from diabetes_rl.safety import SafetyShield
+from diabetes_rl.wrappers import (FreshEpisodeWrapper, GlucoseControlWrapper, GlucoseTrendWrapper,
+                                  action_to_multiplier, make_glucose_env, reward_scale_for)
+
+_uid = iter(range(10_000))
+
+
+def _id():
+    return f"simglucose/test-{next(_uid)}-v0"
+
+
+def _cgm_trace(env, action, n=40):
+    obs, info = env.reset()
+    out = [float(np.ravel(obs)[0])]
+    for _ in range(n):
+        obs, *_ = env.step(action)
+        out.append(float(np.ravel(obs)[0]))
+    return np.array(out), info
+
+
+# ---------------------------------------------------------------- splits
+def test_three_way_split_is_disjoint_and_keeps_test_set():
+    train, val, test = train_val_test_split(2, 1, seed=0)
+    assert (len(train), len(val), len(test)) == (21, 3, 6)
+    assert not (set(train) & set(val)) and not (set(train) & set(test)) and not (set(val) & set(test))
+    assert sorted(train + val + test) == sorted(ALL_PATIENTS)
+    assert test == stratified_holdout(2, seed=0)[1]  # comparable with earlier studies
+
+
+def test_split_without_validation_patients():
+    train, val, test = train_val_test_split(2, 0, seed=0)
+    assert val == [] and len(train) == 24
+
+
+# ---------------------------------------------------------------- metrics
+def test_metrics_basic_and_gri():
+    bg = [50] * 10 + [100] * 80 + [300] * 10
+    m = glycemic_metrics(bg)
+    assert m["time_in_range_pct"] == pytest.approx(80)
+    assert m["time_severe_hypo_pct"] == pytest.approx(10)
+    assert m["time_severe_hyper_pct"] == pytest.approx(10)
+    assert m["gri"] == pytest.approx(3.0 * 10 + 1.6 * 10)
+    assert m["lbgi"] > 0 and m["hbgi"] > 0
+
+
+# ---------------------------------------------------------------- action / reward design
+def test_action_mapping_is_safe_at_neutral():
+    assert action_to_multiplier(-1.0, 5.0) == 0.0          # suspend
+    assert action_to_multiplier(0.0, 5.0) == 1.0           # prescribed basal
+    assert action_to_multiplier(1.0, 5.0) == 5.0
+    xs = np.linspace(-1, 1, 41)
+    ys = [action_to_multiplier(x, 5.0) for x in xs]
+    assert np.all(np.diff(ys) > 0)
+
+
+@pytest.mark.parametrize("name", list(REWARD_FUNCTIONS))
+def test_reward_scale_normalizes_into_unit_range(name):
+    f = REWARD_FUNCTIONS[name]
+    s = reward_scale_for(f)
+    vals = [f([bg]) * s for bg in np.linspace(40, 400, 50)]
+    assert min(vals) >= -1.0 - 1e-9 and max(vals) <= 1.0 + 1e-9
+
+
+# ---------------------------------------------------------------- safety shield
+def test_shield_suspends_when_low_or_falling_fast():
+    sh = SafetyShield()
+    for v in (150, 150, 150, 150, 150):
+        sh.observe(v)
+    assert sh.filter(0.02)[1] is False                     # stable, in range
+    sh.reset()
+    for v in (68, 68, 68):
+        sh.observe(v)
+    dose, suspended = sh.filter(0.02)
+    assert suspended and float(dose) == 0.0                # already low
+    sh.reset()
+    for v in (130, 120, 110, 100, 90):                     # -3.3 mg/dL/min -> ~-10 in 30 min
+        sh.observe(v)
+    assert sh.filter(0.02)[1] is True                      # projected low
+
+
+# ---------------------------------------------------------------- baselines
+def test_basal_and_basal_bolus_controllers():
+    assert float(BasalController("child#008").act(120.0)[0]) == pytest.approx(basal_rate("child#008"))
+    bb = BasalBolusController("adult#001")
+    assert float(bb.act(120.0, {"meal": 0.0})[0]) == pytest.approx(basal_rate("adult#001"))
+    assert float(bb.act(120.0, {"meal": 10.0, "sample_time": 3.0})[0]) > basal_rate("adult#001")
+
+
+def test_basal_rates_vary_across_population():
+    rates = [basal_rate(p) for p in ALL_PATIENTS]
+    assert max(rates) / min(rates) > 5  # why absolute action ranges are a problem
+
+
+# ---------------------------------------------------------------- episode control
+def test_plain_reset_replays_the_same_day_but_fresh_wrapper_does_not():
+    a = np.array([basal_rate("child#008")], np.float32)
+    env = make_env(env_id=_id(), patient_name="child#008", env_seed=1)
+    t1, i1 = _cgm_trace(env, a)
+    t2, i2 = _cgm_trace(env, a)
+    assert np.allclose(t1, t2) and i1["time"] == i2["time"]  # simglucose quirk
+    fresh = FreshEpisodeWrapper(make_env(env_id=_id(), patient_name="child#008", env_seed=1))
+    starts = {str(fresh.reset()[1]["time"]) for _ in range(4)}
+    assert len(starts) > 1
+
+
+def test_fixed_episode_matches_benchmark_day():
+    a = np.array([basal_rate("adult#005")], np.float32)
+    bench = make_env(env_id=_id(), patient_name="adult#005", env_seed=7)
+    ref, _ = _cgm_trace(bench, a)
+    fixed = make_glucose_env(_id(), patient_name="child#001",
+                             fixed_episodes=[("adult#005", 7)], env_version="v1")
+    # v1 wrapper normalizes CGM; undo it and compare to the raw benchmark day
+    obs, _ = fixed.reset()
+    out = [float(obs[3]) * 400.0]
+    for _ in range(40):
+        obs, *_ = fixed.step(np.array([a[0]], np.float32))
+        out.append(float(obs[3]) * 400.0)
+    assert np.allclose(ref, out, atol=1e-3)
+
+
+# ---------------------------------------------------------------- env versions
+def test_v1_default_is_unchanged():
+    env = make_glucose_env(_id(), patient_name="adolescent#001")
+    assert isinstance(env, GlucoseTrendWrapper)
+    assert env.observation_space.shape == (8,)
+    assert float(env.action_space.high[0]) == pytest.approx(0.1)
+    assert env.terminal_penalty == 100.0
+
+
+def test_v2_neutral_action_delivers_basal_and_iob_is_steady():
+    env = make_glucose_env(_id(), patient_name="child#008", env_seed=2, env_version="v2",
+                           reward_fun=REWARD_FUNCTIONS["magni"])
+    assert isinstance(env, GlucoseControlWrapper)
+    obs, info = env.reset()
+    assert obs.shape == env.observation_space.shape
+    for _ in range(40):
+        obs, r, term, trunc, info = env.step(np.zeros(1, np.float32))
+        assert -1.0 - env.terminal_penalty <= r <= 1.0
+    assert info["insulin"] == pytest.approx(basal_rate("child#008"), rel=1e-3)
+    assert info["iob_rel"] == pytest.approx(1.0, abs=1e-3)
+    assert env.observation_space.contains(obs)
+
+
+def test_v2_shield_blocks_an_overdose_when_glucose_is_low():
+    env = make_glucose_env(_id(), patient_name="child#009", env_seed=0, env_version="v2",
+                           reward_fun=REWARD_FUNCTIONS["magni"], shield=True)
+    env.reset()
+    suspended = False
+    for _ in range(200):  # max dose until the shield intervenes
+        _, _, term, _, info = env.step(np.ones(1, np.float32))
+        if info["shield_suspended"]:
+            suspended = True
+            assert info["insulin"] == 0.0
+            break
+        assert not term
+    assert suspended

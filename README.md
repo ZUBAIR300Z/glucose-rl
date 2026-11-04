@@ -72,6 +72,37 @@ safer" claim — and that claim would have been wrong.** Reporting all three
 is the point. Making the good seed *reproducible* (variance reduction + a
 stronger hypoglycemia penalty) is the next piece of work.
 
+> **Caveat found in a later review.** In this study each seed's "best"
+> checkpoint was chosen by evaluating on the *same* 6 held-out patients that
+> are reported above, so the SAC numbers are optimistically biased (mild
+> test-set leakage). `train_pooled.py` now selects on 3 separate validation
+> patients and keeps the test set identical, so new runs are directly
+> comparable — see [v2](#v2-review-fixes-and-a-redesigned-agent).
+
+### Reference baselines (no learning, same 6 held-out patients × 5 days)
+
+| Controller | Information used | Time in Range ↑ | TBR <70 ↓ | Survived |
+|----|----|----|----|----|
+| PID (repo) | CGM | 54.5% ± 15.4 | 11.2% | 70% |
+| Prescribed basal only | patient's basal rate, open loop | 46.3% ± 21.3 | **0.0%** | 70% |
+| Basal-bolus | basal + **announced meals** (CR/CF) | **79.7%** ± 17.1 | 5.7% | 100% |
+
+The PID's hypoglycemia is self-inflicted: simply delivering the prescribed
+basal rate never goes low. Most of it comes from three insulin-sensitive
+patients (child#009 27%, adolescent#007 19%, adolescent#010 18% TBR) receiving
+the *same* gains and the same absolute dose range as everyone else. The
+basal-bolus row knows meal sizes the agent never sees, so it is a ceiling for
+"standard of care", not a like-for-like rival. (Crashes for the basal-only
+controller are BG > 600 mg/dL: uncovered meals, not lows.)
+
+**A safety shield alone does not fix this.** Putting the predictive
+low-glucose-suspend shield (`--shield`) in front of the PID barely moves its
+hypoglycemia (TBR 11.2% → 11.0%, TBR < 54 still 7.4%; survival 70% → 80%),
+even though it suspends insulin for ~3.7 h a day. The lows are caused by
+insulin delivered *hours earlier*, which a last-moment suspend cannot recall.
+Safety has to come from dosing decisions that account for insulin on board,
+which is why the v2 agent observes it explicitly.
+
 ### The development story (why the single-patient number is misleading)
 
 Trained *and* evaluated on **one** patient (`adolescent#001`), GlucoRL looks
@@ -145,7 +176,11 @@ Stable-Baselines3 version is planned — see Roadmap; not yet run.)*
 
 **Baseline.** A correction-only PID controller
 (`diabetes_rl/baselines.py`) that observes the same CGM signal as the
-agent, for a fair head-to-head comparison.
+agent, for a fair head-to-head comparison. Prescribed-basal and
+meal-announced basal-bolus references were added in v2.
+
+**More algorithms (v2).** TD3, TQC, CrossQ, PPO and RecurrentPPO via
+`--algo`; see [v2](#v2-review-fixes-and-a-redesigned-agent).
 
 ## Case Study: Diagnosing & Fixing a Failed Agent
 
@@ -169,26 +204,105 @@ This before/after is documented with figures in [`docs/`](docs/) and is,
 deliberately, part of the project's story: identifying *why* a model
 fails is as important as training one that works.
 
+## v2: review fixes and a redesigned agent
+
+A code review of the pipeline found problems that bias the numbers above, and
+a root cause for the hypoglycemia / seed variance that a different algorithm
+alone would not fix. Methodology fixes are on by default; everything that
+would change the original setup is **opt-in** (`--env-version v2`, `--algo`,
+`--shield`), so the v1 results stay reproducible.
+
+> **Status:** implemented, unit-tested (`python -m pytest -q`) and
+> smoke-trained for every algorithm. The full multi-seed v2 study has **not**
+> been run yet, so no v2 performance claims are made here.
+
+### Methodology fixes (default)
+
+| Problem | Consequence | Fix |
+|----|----|----|
+| Best checkpoint chosen on the **test** patients | held-out scores biased upward | 21 train / 3 validation / 6 test split (`cohorts.train_val_test_split`); test set unchanged |
+| simglucose's `reset()` **replays the same meal day** (scenario is drawn at construction) | `train_sac.py` trained on only `n_envs` distinct days; `evaluate.py`'s "5 episodes" were one day five times | `FreshEpisodeWrapper` (new day every training episode); a freshly seeded env per evaluation episode |
+| Validation drew new random days at every evaluation | noisy "best checkpoint" | `FixedEpisodesWrapper`: the same fixed validation days every time |
+| `setuptools>=81` removed `pkg_resources`, which simglucose imports | a fresh `pip install` cannot import simglucose | `setuptools<81` pinned; lock file re-encoded UTF-16 → UTF-8 |
+
+### Why the agent overdoses: one action range for a 6× range of patients
+
+Prescribed basal rates differ **6×** across the 30 virtual patients
+(child#003 ≈ 0.005 U/min, adult#006 ≈ 0.029 U/min). The v1 agent acts in
+absolute `[0, 0.1]` U/min for everyone, and SAC's *untrained, neutral* output
+(0.05 U/min) is already **~10× a child's basal rate**. With only 12 minutes of
+CGM history the policy cannot tell which patient it is dosing. That matches
+the observed failure (over-dosing into hypoglycemia, very seed-dependent)
+better than "SAC is unstable" does. Separately, the v1 terminal penalty (100)
+is worth about **one step** of severe hypoglycemia (Magni risk ≈ 84 at
+40 mg/dL, ≈ 400 at 10 mg/dL), so crashing is barely discouraged.
+
+### v2 environment (`--env-version v2`, `GlucoseControlWrapper`)
+
+| Change | Rationale |
+|----|----|
+| **Basal-relative action** in `[-1, 1]`: −1 = suspend, 0 = prescribed basal, +1 = 5× basal | one policy means the same thing for every patient; the network's neutral output is the safe clinical default. Pumps always know the prescribed basal |
+| **Insulin-on-board** (2-compartment model, τ = 55 min) relative to basal | insulin acts for ~5 h; the last four doses (12 min) cannot represent that |
+| **1 h CGM history** + least-squares trend | longer context for meals and trends |
+| **Time of day** (sin/cos) | simglucose meals cluster at breakfast / lunch / dinner |
+| **Normalized reward** in [−1, 1] + terminal penalty 1/(1−γ) | a crash is now strictly worse than any survivable day |
+| Optional **safety shield** (`--shield`, `diabetes_rl/safety.py`) | predictive low-glucose suspend, as in commercial pumps: no insulin if CGM < 70 or the 30-min projection < 80 mg/dL |
+
+### More algorithms (`--algo`, `diabetes_rl/algos.py`)
+
+`sac` (original), `td3`, **`tqc`** (truncated quantile critics: curbs the
+Q-overestimation that shows up here as over-dosing), **`crossq`** (much more
+sample-efficient: the simulator, at ~100–200 steps/s/core, is the bottleneck),
+`ppo`, and **`recurrentppo`** (LSTM memory for unobserved meals / insulin).
+
+### Evaluation upgrades (`scripts/benchmark.py`)
+
+* Extra baselines: prescribed basal, and meal-announced basal-bolus (`--with-bb`).
+* **Ensembles**: `--model A B C` also scores the median action of several
+  seeds. Training-seed variance is the dominant effect, and a median of three
+  policies needs two of them to agree before it overdoses.
+* `--shield` puts the same safety shield in front of *every* controller, including v1 models.
+* Clinical metrics in the CSV: TBR < 54, TAR > 250, CV, LBGI/HBGI and the
+  Glycemia Risk Index, alongside the consensus targets (TIR > 70%, TBR < 4%).
+* Each controller runs in its own freshly seeded env (identical day); the
+  agent's env is rebuilt from the `config.json` saved at training time.
+
+### Running the v2 study
+
+``` bash
+python -m pytest -q
+python scripts/run_study.py --env-version v2 --algo tqc --tag v2-tqc --ensemble --shield-eval --with-bb
+python scripts/run_study.py --env-version v2 --algo crossq --tag v2-crossq --ensemble
+python scripts/plot_study.py --tag v2-tqc --out docs/study_v2_tqc.png
+```
+
 ## Project Structure
 
 ```         
 diabetes_rl/                  reusable package
 ├── envs.py                   simglucose Gymnasium env registration + factory
-├── wrappers.py               trend state, action scaling, patient resampling, env factory
-├── cohorts.py                patient cohorts + held-out train/test splits
+├── wrappers.py               v1 + v2 agent wrappers, episode control, env factory
+├── cohorts.py                patient cohorts + train/validation/test splits
+├── patients.py               per-patient basal rate, CR, CF (pump settings)
 ├── rewards.py                asymmetric reward functions (Magni, zone)
-├── baselines.py              PID controller
-├── metrics.py                glycemic metrics (Time-in-Range, etc.)
+├── baselines.py              PID, prescribed-basal and basal-bolus controllers
+├── safety.py                 predictive low-glucose-suspend safety shield
+├── algos.py                  SAC / TD3 / TQC / CrossQ / PPO / RecurrentPPO factory
+├── config.py                 run config.json -> identical eval env
+├── metrics.py                glycemic metrics (TIR, TBR, CV, LBGI/HBGI, GRI)
 └── sac_scratch.py            SAC implemented from scratch in PyTorch
 scripts/
 ├── check_env.py              environment sanity check (random policy)
 ├── pid_baseline.py           run + plot the PID baseline
 ├── train_sac.py              train SAC (single patient; parallel envs, checkpoints)
-├── train_pooled.py           pooled multi-patient training, held-out model selection
+├── train_pooled.py           pooled multi-patient training, validation-based selection
 ├── train_scratch.py          train the from-scratch SAC
 ├── evaluate.py               agent vs PID, head-to-head plot
-├── benchmark.py              multi-patient × multi-seed benchmark (+ significance test)
+├── benchmark.py              baselines vs agent(s)/ensemble (+ shield, significance test)
+├── run_study.py              train + benchmark several seeds end to end
+├── plot_study.py             multi-seed study figure
 └── plot_training.py          learning curve from the eval logs
+tests/                        fast unit tests (python -m pytest -q)
 docs/                         figures and the methods deep-dive
 requirements.txt              dependencies
 requirements-lock.txt         exact pinned versions (reproducibility)
@@ -231,11 +345,15 @@ python scripts/plot_training.py
 
 python scripts/benchmark.py --model models/best/best_model --seeds 5
 
-# 6. Generalization study: pooled training (24 train / 6 held-out patients),
+# 6. Generalization study: pooled training (21 train / 3 validation / 6 held-out),
 
 #    then benchmark on the HELD-OUT set (train_pooled.py prints the exact command)
 
 python scripts/train_pooled.py --timesteps 500000 --n-envs 6 --seed 0
+
+# 7. Whole study in one command (several seeds + aggregate); v2 options above
+
+python scripts/run_study.py --seeds 0 1 2
 
 # Optional: watch training live
 
@@ -256,11 +374,20 @@ tensorboard --logdir logs
     patients, held-out evaluation on 6 unseen patients × 3 training seeds
     — result: ties PID on Time-in-Range, worse on hypoglycemia, high
     seed variance (documented above)
--   [ ] **Reduce training-seed variance** and cut hypoglycemia (stronger
-    hypo penalty / `zone` reward) so the seed-0 quality is reproducible
--   [ ] Reward ablation (Magni vs interpretable zone reward)
--   [ ] State ablation (with vs without trend history)
--   [ ] Stronger baselines (tuned PID, basal-bolus) + PPO/TD3 comparison
+-   [x] Review fixes: leakage-free model selection, fresh meal day per
+    episode, fixed validation days, install pin (see [v2](#v2-review-fixes-and-a-redesigned-agent))
+-   [x] v2 env (basal-relative action, IOB, time of day, normalized reward),
+    safety shield, TQC / CrossQ / TD3 / PPO / RecurrentPPO, seed ensembles,
+    basal and basal-bolus baselines, clinical metrics, unit tests
+-   [ ] **Run the v2 multi-seed study** (TQC and CrossQ first; ≥ 5 seeds) and
+    report it next to the v1 table
+-   [ ] **Reduce training-seed variance** and cut hypoglycemia so the seed-0
+    quality is reproducible (v2 + ensemble + shield are the candidate fixes)
+-   [ ] Ablations: v1 vs v2 state; absolute vs basal-relative action; reward
+    (Magni vs zone); shield during training vs evaluation only
+-   [ ] Constrained RL (maximize TIR subject to TBR < 4%, e.g. Lagrangian SAC/PPO)
+-   [ ] Meal-announced (hybrid closed-loop) agent, compared against basal-bolus
+-   [ ] Tuned, patient-scaled PID with anti-windup (`integral_limit`) as a stronger classical baseline
 -   [ ] Validate from-scratch SAC matches Stable-Baselines3
 
 ## References & Acknowledgements

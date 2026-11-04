@@ -44,3 +44,26 @@ def stratified_holdout(n_per_cohort: int = 2, seed: int = 0):
         test.extend(rng.sample(cohort, n_per_cohort))
     train = [p for p in ALL_PATIENTS if p not in test]
     return train, test
+
+
+def train_val_test_split(test_per_cohort: int = 2, val_per_cohort: int = 1, seed: int = 0):
+    """Three-way stratified split: ``(train, val, test)``.
+
+    Model selection (e.g. "keep the best checkpoint") must NOT look at the test
+    patients, or the test score is optimistically biased. This carves a
+    validation set out of the *training* patients and keeps the test set
+    **identical** to ``stratified_holdout(test_per_cohort, seed)`` so results
+    stay comparable with earlier studies. Defaults: 21 train / 3 val / 6 test.
+
+    ``val_per_cohort=0`` returns an empty validation list; callers then validate
+    on the training patients with unseen meal scenarios (still leakage-free).
+    """
+    train_pool, test = stratified_holdout(test_per_cohort, seed=seed)
+    rng = random.Random(seed + 1)
+    val = []
+    if val_per_cohort > 0:
+        for cohort in COHORTS.values():
+            remaining = [p for p in cohort if p in train_pool]
+            val.extend(rng.sample(remaining, val_per_cohort))
+    train = [p for p in train_pool if p not in val]
+    return train, val, test

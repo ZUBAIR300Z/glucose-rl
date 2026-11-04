@@ -6,7 +6,8 @@ training steps. Episode length climbing to 480 means the agent learned to keep
 the patient alive for the full day; rising reward means tighter glucose control.
 
 Run from the project root (after / during training):
-    python scripts/plot_training.py
+    python scripts/plot_training.py                                  # train_sac.py log
+    python scripts/plot_training.py --log logs/<tag>_s<seed>/evaluations.npz   # train_pooled.py
 """
 from __future__ import annotations
 
@@ -26,17 +27,22 @@ DOCS_DIR = os.path.join(PROJECT_ROOT, "docs")
 
 
 def main():
-    if not os.path.exists(LOG):
-        sys.exit(f"No eval log at {LOG} -- train first (it appears once the first "
+    import argparse
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--log", default=LOG, help="EvalCallback evaluations.npz")
+    p.add_argument("--out", default=os.path.join(DOCS_DIR, "learning_curve.png"))
+    args = p.parse_args()
+    if not os.path.exists(args.log):
+        sys.exit(f"No eval log at {args.log} -- train first (it appears once the first "
                  f"evaluation runs, ~10k steps in).")
 
-    data = np.load(LOG)
+    data = np.load(args.log)
     steps = data["timesteps"]
     reward_mean = data["results"].mean(axis=1)
     reward_std = data["results"].std(axis=1)
     ep_len_mean = data["ep_lengths"].mean(axis=1)
 
-    os.makedirs(DOCS_DIR, exist_ok=True)
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(9, 7), sharex=True)
 
     ax1.plot(steps, reward_mean, "-o", color="C0", ms=4, label="held-out mean reward")
@@ -55,7 +61,7 @@ def main():
     ax2.grid(alpha=0.2)
 
     fig.tight_layout()
-    out = os.path.join(DOCS_DIR, "learning_curve.png")
+    out = args.out
     fig.savefig(out, dpi=120)
     print(f"Saved {out}  ({len(steps)} evaluations, up to step {int(steps[-1]):,})")
 

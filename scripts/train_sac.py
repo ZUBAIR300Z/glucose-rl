@@ -31,7 +31,7 @@ from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
 from diabetes_rl.envs import make_env, STEPS_PER_DAY
 from diabetes_rl.rewards import REWARD_FUNCTIONS
-from diabetes_rl.wrappers import GlucoseTrendWrapper
+from diabetes_rl.wrappers import FreshEpisodeWrapper, GlucoseTrendWrapper
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
@@ -44,28 +44,34 @@ def env_id_for(patient: str, reward_name: str) -> str:
     return f"simglucose/{pid}-train-{reward_name}-v0"
 
 
-def make_env_fn(patient, reward_name, history, terminal_penalty):
+def make_env_fn(patient, reward_name, history, terminal_penalty, env_seed):
     """Return a zero-arg factory that builds one wrapped, monitored env.
 
     Used by the vectorized env. Note we pass `reward_name` (a string), not the
     function object, so it is looked up inside each worker process -- clean and
     pickle-safe.
+
+    FreshEpisodeWrapper matters: simglucose's reset() replays the SAME meal day,
+    so without it each worker would train on a single day forever.
     """
     def _init():
         env = make_env(
-            env_id=env_id_for(patient, reward_name),
+            env_id=f"{env_id_for(patient, reward_name)[:-3]}-e{env_seed}-v0",
             patient_name=patient,
             reward_fun=REWARD_FUNCTIONS[reward_name],
             max_episode_steps=STEPS_PER_DAY,
+            env_seed=env_seed,
         )
+        env = FreshEpisodeWrapper(env)
         env = GlucoseTrendWrapper(env, history_len=history, terminal_penalty=terminal_penalty)
         return Monitor(env)
 
     return _init
 
 
-def build_vec_env(patient, reward_name, history, terminal_penalty, n_envs):
-    fns = [make_env_fn(patient, reward_name, history, terminal_penalty) for _ in range(n_envs)]
+def build_vec_env(patient, reward_name, history, terminal_penalty, n_envs, seed=0):
+    fns = [make_env_fn(patient, reward_name, history, terminal_penalty, seed * 1000 + i)
+           for i in range(n_envs)]
     if n_envs > 1:
         return SubprocVecEnv(fns)
     return DummyVecEnv(fns)
@@ -93,7 +99,7 @@ def main():
     os.makedirs(LOGS_DIR, exist_ok=True)
 
     env = build_vec_env(args.patient, args.reward, args.history,
-                        args.terminal_penalty, args.n_envs)
+                        args.terminal_penalty, args.n_envs, seed=args.seed)
     print(f"Observation space: {env.observation_space}")
     print(f"Action space:      {env.action_space}")
     print(f"Reward: {args.reward} | history: {args.history} | parallel envs: {args.n_envs}")

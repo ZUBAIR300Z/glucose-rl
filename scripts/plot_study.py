@@ -3,8 +3,8 @@ Visualize the multi-seed generalization study (results/study/seed*.csv).
 
 Produces docs/study_results.png with three panels:
   1. Controller comparison (TIR vs hypoglycemia) on held-out patients
-  2. SAC training-seed variance (the headline finding)
-  3. Per held-out patient Time-in-Range (PID vs SAC)
+  2. Agent training-seed variance (the headline finding)
+  3. Per held-out patient Time-in-Range (PID vs agent)
 """
 from __future__ import annotations
 
@@ -24,8 +24,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STUDY = os.path.join(ROOT, "results", "study")
 DOCS = os.path.join(ROOT, "docs")
 
-CTRLS = ["random", "pid", "sac"]
-LBL = {"random": "Random", "pid": "PID", "sac": "SAC"}
+CTRLS = ["random", "pid", "agent"]
+LBL = {"random": "Random", "pid": "PID", "agent": "Agent"}
 
 
 def load(study_dir):
@@ -33,7 +33,9 @@ def load(study_dir):
     if not files:
         sys.exit(f"No seed*.csv in {study_dir} — run scripts/run_study.py first.")
     frames = [pd.read_csv(f).assign(train_seed=int(os.path.basename(f)[4:-4])) for f in files]
-    return pd.concat(frames, ignore_index=True)
+    df = pd.concat(frames, ignore_index=True)
+    df["controller"] = df["controller"].replace({"sac": "agent"})  # pre-v2 CSVs
+    return df
 
 
 def main():
@@ -59,25 +61,25 @@ def main():
     ax.bar(x + w / 2, tbr, w, yerr=tbr_s, capsize=4, color="#c62828", label="Time below range (<70)")
     ax.set_xticks(x); ax.set_xticklabels([LBL[c] for c in CTRLS])
     ax.set_ylabel("% of day"); ax.set_ylim(0, 80)
-    ax.set_title(f"Held-out patients: range vs safety\n({n_seeds} seeds x 6 patients x 5 eval seeds, mean+/-std)")
+    ax.set_title(f"Held-out patients: range vs safety\n({n_seeds} seeds x {df.patient.nunique()} patients, mean+/-std)")
     ax.legend(fontsize=8); ax.grid(axis="y", alpha=0.2)
 
     # --- Panel 2: SAC training-seed variance (the headline) ---
     ax = axes[1]
     seeds = sorted(df.train_seed.unique())
-    sac = df[df.controller == "sac"]
+    sac = df[df.controller == "agent"]
     stir = [sac[sac.train_seed == s].time_in_range_pct.mean() for s in seeds]
     stbr = [sac[sac.train_seed == s].time_hypo_pct.mean() for s in seeds]
     x = np.arange(len(seeds)); w = 0.38
-    ax.bar(x - w / 2, stir, w, color="#2e7d32", label="SAC TIR")
-    ax.bar(x + w / 2, stbr, w, color="#c62828", label="SAC hypo")
+    ax.bar(x - w / 2, stir, w, color="#2e7d32", label="Agent TIR")
+    ax.bar(x + w / 2, stbr, w, color="#c62828", label="Agent hypo")
     pid_tir = df[df.controller == "pid"].time_in_range_pct.mean()
     pid_tbr = df[df.controller == "pid"].time_hypo_pct.mean()
     ax.axhline(pid_tir, ls="--", c="#1f77b4", lw=1.5, label=f"PID TIR ({pid_tir:.0f}%)")
     ax.axhline(pid_tbr, ls="--", c="#ff9800", lw=1.5, label=f"PID hypo ({pid_tbr:.0f}%)")
     ax.set_xticks(x); ax.set_xticklabels([f"seed {s}" for s in seeds])
     ax.set_ylabel("% of day")
-    ax.set_title("SAC training-seed variance\n(seed 0 good; others unsafe = unreliable)")
+    ax.set_title("Agent training-seed variance")
     ax.legend(fontsize=8); ax.grid(axis="y", alpha=0.2)
 
     # --- Panel 3: per held-out patient TIR (PID vs SAC) ---
@@ -85,10 +87,10 @@ def main():
     patients = sorted(df.patient.unique())
     short = [p.replace("adolescent", "ado").replace("adult", "adu").replace("child", "chi") for p in patients]
     pid_p = [df[(df.controller == "pid") & (df.patient == p)].time_in_range_pct.mean() for p in patients]
-    sac_p = [df[(df.controller == "sac") & (df.patient == p)].time_in_range_pct.mean() for p in patients]
+    sac_p = [df[(df.controller == "agent") & (df.patient == p)].time_in_range_pct.mean() for p in patients]
     x = np.arange(len(patients)); w = 0.38
     ax.bar(x - w / 2, pid_p, w, color="#1f77b4", label="PID")
-    ax.bar(x + w / 2, sac_p, w, color="#d62828", label="SAC (avg over seeds)")
+    ax.bar(x + w / 2, sac_p, w, color="#d62828", label="Agent (avg over seeds)")
     ax.set_xticks(x); ax.set_xticklabels(short, rotation=30, ha="right", fontsize=8)
     ax.set_ylabel("Time in Range (%)")
     ax.set_title("Per held-out patient: Time in Range")
