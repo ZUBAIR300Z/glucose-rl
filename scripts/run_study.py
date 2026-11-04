@@ -76,6 +76,8 @@ def main():
     p.add_argument("--eval-freq", type=int, default=25_000)
     p.add_argument("--benchmark-seeds", type=int, default=5)
     p.add_argument("--skip-train", action="store_true")
+    p.add_argument("--reuse-benchmarks", action="store_true",
+                   help="aggregate existing results/study/<tag>/seed<k>.csv instead of re-benchmarking")
     args = p.parse_args()
 
     study_dir = os.path.join(STUDY_DIR, args.tag)
@@ -108,9 +110,10 @@ def main():
         best_models.append(best)
 
         dst = os.path.join(study_dir, f"seed{s}.csv")
-        run([PY, os.path.join(ROOT, "scripts", "benchmark.py"),
-             "--model", best, "--patients", *test_patients,
-             "--seeds", args.benchmark_seeds, "--out", dst, *bench_extra])
+        if not (args.reuse_benchmarks and os.path.exists(dst)):
+            run([PY, os.path.join(ROOT, "scripts", "benchmark.py"),
+                 "--model", best, "--patients", *test_patients,
+                 "--seeds", args.benchmark_seeds, "--out", dst, *bench_extra])
         df = pd.read_csv(dst)
         df["train_seed"] = s
         frames.append(df)
@@ -148,9 +151,10 @@ def main():
 
     if args.ensemble and len(best_models) > 1:
         dst = os.path.join(study_dir, "ensemble.csv")
-        run([PY, os.path.join(ROOT, "scripts", "benchmark.py"),
-             "--model", *best_models, "--patients", *test_patients,
-             "--seeds", args.benchmark_seeds, "--out", dst, *bench_extra])
+        if not (args.reuse_benchmarks and os.path.exists(dst)):
+            run([PY, os.path.join(ROOT, "scripts", "benchmark.py"),
+                 "--model", *best_models, "--patients", *test_patients,
+                 "--seeds", args.benchmark_seeds, "--out", dst, *bench_extra])
         summarize(pd.read_csv(dst), f"ENSEMBLE of {len(best_models)} seeds (median action) -- HELD-OUT patients")
 
     print(f"\nSaved: {os.path.join(study_dir, 'all_runs.csv')}")

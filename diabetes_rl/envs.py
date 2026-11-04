@@ -22,6 +22,10 @@ from __future__ import annotations
 import gymnasium as gym
 from gymnasium.envs.registration import register, registry
 
+from diabetes_rl import fastsim
+
+fastsim.enable()  # ~10x faster simglucose, same results (see diabetes_rl/fastsim.py)
+
 DEFAULT_PATIENT = "adolescent#001"
 
 # simglucose's CGM (Dexcom) samples every 3 minutes, so one simulated day is

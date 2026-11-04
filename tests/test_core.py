@@ -142,6 +142,36 @@ def test_fixed_episode_matches_benchmark_day():
     assert np.allclose(ref, out, atol=1e-3)
 
 
+# ---------------------------------------------------------------- fast simulator
+def test_fastsim_matches_original_simulator():
+    from simglucose.patient.t1dpatient import T1DPatient
+    from diabetes_rl import fastsim
+    from diabetes_rl.baselines import BasalBolusController
+
+    assert fastsim.enable() and fastsim.ORIGINAL_STEP is not None
+
+    def day(step_fn):
+        T1DPatient.step, patched = step_fn, T1DPatient.step
+        try:
+            env = make_env(env_id=_id(), patient_name="child#009", env_seed=0)
+            ctrl = BasalBolusController("child#009")
+            obs, info = env.reset()
+            bg = []
+            for _ in range(160):  # 8 h incl. a meal + bolus
+                obs, _, term, _, info = env.step(ctrl.act(float(obs[0]), info))
+                bg.append(info["bg"])
+                if term:
+                    break
+            return np.array(bg)
+        finally:
+            T1DPatient.step = patched
+
+    original = day(fastsim.ORIGINAL_STEP)
+    fast = day(T1DPatient.step)
+    assert len(original) == len(fast)
+    assert np.max(np.abs(original - fast)) < 1e-3  # mg/dL
+
+
 # ---------------------------------------------------------------- env versions
 def test_v1_default_is_unchanged():
     env = make_glucose_env(_id(), patient_name="adolescent#001")
