@@ -68,12 +68,14 @@ class BasalPIDController:
 
     It uses exactly the information the v2 RL agent has (CGM + the patient's
     prescribed basal rate), which makes it the fair classical rival for v2.
-    Defaults come from scripts/tune_pid.py (random search on TRAINING
-    patients only; never on the test patients).
+    Defaults come from scripts/tune_pid.py (61-candidate random search on the
+    21 TRAINING patients, lowest Glycemia Risk Index; never on test patients):
+    training days TIR 72.9% / TBR 4.4%; unseen validation patients TIR 82.6% /
+    TBR 1.7%, no crashes.
     """
 
-    def __init__(self, patient_name: str, target=120.0, kp=0.01, ki=1e-4, kd=0.5,
-                 max_multiplier=5.0, sample_time=3.0):
+    def __init__(self, patient_name: str, target=105.564729, kp=0.014372, ki=4e-06, kd=2.42441,
+                 max_multiplier=8.0, sample_time=3.0):
         self.basal = therapy_params(patient_name)["basal"]
         self.target, self.kp, self.ki, self.kd = target, kp, ki, kd
         self.max_multiplier, self.sample_time = max_multiplier, sample_time
