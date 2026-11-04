@@ -112,6 +112,9 @@ def main():
     p.add_argument("--algo", default=None, help="override the algorithm stored in config.json")
     p.add_argument("--no-agent", action="store_true", help="skip the RL agent(s)")
     p.add_argument("--with-bb", action="store_true", help="add the meal-announced basal-bolus reference")
+    p.add_argument("--ensemble-only", action="store_true",
+                   help="with several --model paths: score only their median-action ensemble "
+                        "(skip baselines and the individual models)")
     p.add_argument("--with-basal-pid", action="store_true",
                    help="add the basal-scaled PID (BasalPIDController, tuned gains)")
     p.add_argument("--shield", action="store_true", help="put the PLGS safety shield in front of every controller")
@@ -141,6 +144,10 @@ def main():
             controllers.append("agent")
             if len(runners) > 1:
                 controllers.append("ensemble")
+            if args.ensemble_only:
+                if len(runners) < 2:
+                    sys.exit("--ensemble-only needs at least two --model paths")
+                controllers = ["ensemble"]
             print(f"agent: {len(runners)} model(s), algo={cfg['algo']}, env={cfg['env_version']}")
         else:
             print("(no models found -- benchmarking baselines only)\n")

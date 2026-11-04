@@ -220,15 +220,16 @@ alone would not fix. Methodology fixes are on by default; everything that
 would change the original setup is **opt-in** (`--env-version v2`, `--algo`,
 `--shield`), so the v1 results stay reproducible.
 
-> **Status: study in progress (interim results below).** Seeds 3–4, the
-> 8×-dose-cap ablation, RecurrentPPO and seed ensembles are still running;
-> this section will be updated when they finish.
+> **Status:** 21 training runs completed (stopped early by choice: seed 4 of
+> v2-SAC and of the 8x-cap variant, and RecurrentPPO seed 2, were not run).
+> All models were trained and scored with the code in this repository.
 
-### Results so far: held-out test patients (6 patients × 5 days)
+### Results: held-out test patients (6 patients × 5 days)
 
 Every model is the checkpoint chosen on the 3 **validation** patients, scored
 on the 6 untouched test patients over the same 30 simulated days as the
-baselines. 500k training steps per seed.
+baselines. 500k training steps per seed. "Ensemble" = median dose of all
+seeds of a configuration.
 
 ![v2 study comparison](docs/study_comparison.png)
 
@@ -236,36 +237,52 @@ baselines. 500k training steps per seed.
 |----|----|----|----|----|----|----|
 | PID (repo) | – | 54.5% | 11.2% | 8.0% | 73% | –21.6 |
 | **PID scaled to basal, tuned** | – | **76.1%** | 2.1% | 0.3% | 90% | – |
-| SAC, v1 env (original setup) | 3 | 52.8% ± 0.7 | 30.2% ± 1.0 | 22.9% | 36% | –23.2 (p < 0.001) |
-| **SAC, v2 env** | 3 | **71.2% ± 2.2** | **0.8% ± 0.5** | **0.0%** | 87% | –4.8 (p = 0.001) |
-| SAC, v2 env, dose cap 8× basal | 1 | 72.5% | 1.1% | 0.3% | 90% | –3.6 (p = 0.04) |
-| TQC, v2 env | 2 | 67.5% ± 1.0 | 0.1% ± 0.1 | 0.0% | 85% | –8.6 (p < 0.001) |
-| PPO, v2 env | 2 | 65.8% ± 1.9 | 0.3% ± 0.3 | 0.0% | 83% | –10.2 (p < 0.001) |
+| Basal-bolus, meals announced (reference) | – | 79.7% | 5.7% | 1.7% | 97% | +3.6 |
+| SAC, v1 env (original setup) | 5 | 53.8% ± 1.3 | 25.6% ± 7.2 | 19.4% | 38% | –22.3 (p < 0.001) |
+| **SAC, v2 env** | 4 | **71.6% ± 2.0** | **1.0% ± 0.6** | **0.0%** | 88% | –4.5 (p = 0.002) |
+| ↳ ensemble of the 4 seeds | – | 72.1% | 0.9% | 0.0% | 90% | –4.0 (p = 0.006) |
+| SAC, v2 env, dose cap 8× basal | 4 | 72.2% ± 1.6 | 1.0% ± 0.6 | 0.3% | 89% | –3.8 (p = 0.012) |
+| TQC, v2 env | 3 | 67.9% ± 1.0 | 0.5% ± 0.6 | 0.0% | 84% | –8.2 (p < 0.001) |
+| PPO, v2 env | 3 | 67.2% ± 2.4 | 0.5% ± 0.3 | 0.0% | 83% | –8.9 (p < 0.001) |
+| RecurrentPPO, v2 env | 2 | 65.9% ± 8.5 | 2.5% ± 2.1 | 0.6% | 87% | –10.2 (p < 0.001) |
 
 1. **The environment redesign fixes the overdosing.** Same algorithm (SAC),
-   same hyperparameters, seeds and budget: hypoglycemia drops from **30.2% to
-   0.8%** of the day and time in range rises **52.8% → 71.2%**. All three v2
-   seeds meet the < 4% hypoglycemia target; none of the three v1 seeds does.
-   Against the original PID, v2-SAC gains +16.7 TIR points with 10.4 points
-   less hypoglycemia (paired Wilcoxon, both p < 0.001).
+   hyperparameters and budget: hypoglycemia drops from **25.6% to 1.0%** of
+   the day and time in range rises **53.8% → 71.6%**. All 4 v2 seeds meet
+   the < 4% hypoglycemia target; none of the 5 v1 seeds does. Against the
+   original PID, v2-SAC gains +17.0 TIR points with 10.2 points less
+   hypoglycemia (paired Wilcoxon over the 30 days, both p < 0.001).
 2. **With leakage-free checkpoint selection, no v1 seed reproduces the
-   original "good" seed 0** (62.6% TIR / 5.8% TBR): all three overdose
-   (~30% TBR). That seed's checkpoint had been picked on the test patients, so
-   part of its apparent safety was likely a selection effect (the training
+   original "good" seed 0** (62.6% TIR / 5.8% TBR); all five overdose (TBR
+   11.6–31.6%). That seed's checkpoint had been picked on the test patients,
+   so part of its apparent safety was likely a selection effect (the training
    set, 21 vs 24 patients, and random streams also differ).
 3. **The algorithm matters far less than the environment.** SAC, TQC and PPO
-   on v2 all land at 66–72% TIR with ≤ 1% hypoglycemia; TQC and PPO are the
-   most conservative (more time high).
-4. **RL does not (yet) beat a well-tuned classical controller.** v2-SAC is
-   4.8 TIR points below the tuned basal-scaled PID at similar hypoglycemia.
-   One suspected cause is the dose cap: the agents may give at most 5× basal,
-   the tuned PID 8×. The first 8×-cap seed narrows the gap to 3.6 points;
-   two more seeds are running.
+   on v2 all land at 67–72% TIR with ≤ 1% hypoglycemia; TQC and PPO are more
+   conservative (more time high). RecurrentPPO's two seeds disagree by 17 TIR
+   points (57% vs 74%), the least reliable at this training budget.
+4. **RL does not beat a well-tuned classical controller here.** The best
+   agents are 4–5 TIR points below the basal-scaled PID tuned on training
+   patients, at similar or lower hypoglycemia. Raising the dose cap from 5×
+   to 8× basal (the PID's cap) adds only +0.6 points: the cap was not the
+   main gap.
+5. **Seed ensembles help a little; a safety shield helps only unsafe
+   controllers.** Median-dose ensembles match or slightly beat the average
+   seed. The shield cuts v1-SAC's severe hypoglycemia from 22.0% to 11.7% and
+   doubles its survival (33% → 68%), but leaves 21% TBR; on v2 agents it
+   changes almost nothing.
+
+**What would most likely help next:** meal announcement (the basal-bolus
+reference shows the value of meal information), constrained RL with an
+explicit TBR < 4% constraint instead of reward shaping, longer training or
+more seeds for RecurrentPPO, and residual RL on top of the tuned PID.
 
 Full tables, including per-cohort results and the evaluation with every
 controller behind the safety shield, are in
-[`docs/study_comparison.md`](docs/study_comparison.md) (generated by
-`scripts/compare_studies.py`).
+[`docs/study_comparison.md`](docs/study_comparison.md). The raw per-day
+results of every run are in [`docs/study_results/`](docs/study_results/);
+`python scripts/compare_studies.py --study-dir docs/study_results`
+regenerates the tables and figures from them.
 
 ### Methodology fixes (default)
 
@@ -461,15 +478,18 @@ tensorboard --logdir logs
 -   [x] v2 env (basal-relative action, IOB, time of day, normalized reward),
     safety shield, TQC / CrossQ / TD3 / PPO / RecurrentPPO, seed ensembles,
     basal and basal-bolus baselines, clinical metrics, unit tests
--   [ ] **Run the v2 multi-seed study** (TQC and CrossQ first; ≥ 5 seeds) and
-    report it next to the v1 table
--   [ ] **Reduce training-seed variance** and cut hypoglycemia so the seed-0
-    quality is reproducible (v2 + ensemble + shield are the candidate fixes)
+-   [x] **v2 multi-seed study** (21 runs; results above): the v2 env removes
+    the overdosing and the seed-to-seed safety variance
+-   [x] Tuned, patient-scaled PID (`BasalPIDController`) as a stronger
+    classical baseline
+-   [ ] Beat the tuned basal-scaled PID: meal announcement, constrained RL,
+    residual RL on top of the PID
+-   [ ] Finish the stopped runs (v2-SAC and 8x-cap seed 4, RecurrentPPO seed 2)
+    and try CrossQ (all supported by `train_pooled.py`; runs are resumable)
 -   [ ] Ablations: v1 vs v2 state; absolute vs basal-relative action; reward
     (Magni vs zone); shield during training vs evaluation only
 -   [ ] Constrained RL (maximize TIR subject to TBR < 4%, e.g. Lagrangian SAC/PPO)
 -   [ ] Meal-announced (hybrid closed-loop) agent, compared against basal-bolus
--   [ ] Tuned, patient-scaled PID with anti-windup (`integral_limit`) as a stronger classical baseline
 -   [ ] Validate from-scratch SAC matches Stable-Baselines3
 
 ## References & Acknowledgements
