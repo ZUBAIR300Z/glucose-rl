@@ -81,23 +81,31 @@ stronger hypoglycemia penalty) is the next piece of work.
 
 ### Reference baselines (no learning, same 6 held-out patients × 5 days)
 
-| Controller | Information used | Time in Range ↑ | TBR <70 ↓ | Survived |
-|----|----|----|----|----|
-| PID (repo) | CGM | 54.5% ± 15.4 | 11.2% | 70% |
-| Prescribed basal only | patient's basal rate, open loop | 46.3% ± 21.3 | **0.0%** | 70% |
-| Basal-bolus | basal + **announced meals** (CR/CF) | **79.7%** ± 17.1 | 5.7% | 100% |
+| Controller | Information used | Time in Range ↑ | TBR <70 ↓ | TBR <54 ↓ | Survived |
+|----|----|----|----|----|----|
+| PID (repo) | CGM | 54.5% ± 15.2 | 11.2% | 8.0% | 73% |
+| **PID scaled to basal, tuned** | CGM + prescribed basal | **76.1%** ± 11.8 | **2.1%** | **0.3%** | 90% |
+| Prescribed basal only | prescribed basal, open loop | 46.3% ± 20.9 | 0.0% | 0.0% | 70% |
+| Basal-bolus | basal + **announced meals** (CR/CF) | 79.7% ± 16.8 | 5.7% | 1.7% | 97% |
 
 The PID's hypoglycemia is self-inflicted: simply delivering the prescribed
 basal rate never goes low. Most of it comes from three insulin-sensitive
 patients (child#009 27%, adolescent#007 19%, adolescent#010 18% TBR) receiving
 the *same* gains and the same absolute dose range as everyone else. The
 basal-bolus row knows meal sizes the agent never sees, so it is a ceiling for
-"standard of care", not a like-for-like rival. (Crashes for the basal-only
-controller are BG > 600 mg/dL: uncovered meals, not lows.)
+"standard of care", not a like-for-like rival.
+
+**A classical controller that scales its doses to each patient's prescribed
+basal rate** (`BasalPIDController`, gains tuned on the 21 *training* patients
+only, `scripts/tune_pid.py`) gets within 4 points of that ceiling without
+knowing about meals, with less hypoglycemia, and meets the consensus targets
+for TIR (> 70%), TBR (< 4%) and TBR < 54 (< 1%). **This, not the original
+PID, is the bar an RL agent has to clear.** (Its 3 crashes, like all of the
+basal-only controller's, are BG > 600 mg/dL: uncovered meals, not lows.)
 
 **A safety shield alone does not fix this.** Putting the predictive
 low-glucose-suspend shield (`--shield`) in front of the PID barely moves its
-hypoglycemia (TBR 11.2% → 11.0%, TBR < 54 still 7.4%; survival 70% → 80%),
+hypoglycemia (TBR 11.2% → 11.0%, TBR < 54 8.0% → 7.4%; survival 73% → 80%),
 even though it suspends insulin for ~3.7 h a day. The lows are caused by
 insulin delivered *hours earlier*, which a last-moment suspend cannot recall.
 Safety has to come from dosing decisions that account for insulin on board,
