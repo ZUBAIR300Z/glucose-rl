@@ -80,12 +80,28 @@ def main():
     defaults = dict(target=120.0, kp=0.01, ki=1e-4, kd=0.5, max_multiplier=5.0)
     cands = [defaults] + [sample(rng) for _ in range(args.candidates)]
 
+    # Results are saved after every candidate, so an interrupted search resumes
+    # where it stopped (the candidate list is deterministic for a given --seed).
+    os.makedirs(os.path.join(ROOT, "results"), exist_ok=True)
+    partial = os.path.join(ROOT, "results", f"pid_tuning_partial_seed{args.seed}.csv")
+    done = {}
+    if os.path.exists(partial):
+        for row in pd.read_csv(partial).to_dict("records"):
+            i = int(row["idx"])
+            if i < len(cands) and all(abs(row[k] - cands[i][k]) < 1e-9 for k in cands[i]):
+                done[i] = row
     results = []
     for i, g in enumerate(cands):
+        if i in done:
+            results.append(done[i])
+            continue
         r = evaluate(train, [0], g)
-        results.append({**g, **{f"train1_{k}": v for k, v in r.items()}})
+        results.append({"idx": i, **g, **{f"train1_{k}": v for k, v in r.items()}})
+        pd.DataFrame(results).to_csv(partial, index=False)
         print(f"[{i + 1:3d}/{len(cands)}] GRI {r['gri']:5.1f}  TIR {r['tir']:5.1f}  TBR {r['tbr']:4.1f}  "
               f"surv {100 * r['surv']:3.0f}%  {json.dumps({k: round(v, 6) for k, v in g.items()})}", flush=True)
+    if done:
+        print(f"(reused {len(done)} candidates from {partial})")
 
     df = pd.DataFrame(results).sort_values("train1_gri")
     finalists = df.head(args.top).copy()
@@ -99,7 +115,6 @@ def main():
     best = {k: float(df.loc[best_idx, k]) for k in keys}
     val_r = evaluate(val, [0, 1, 2], best)
 
-    os.makedirs(os.path.join(ROOT, "results"), exist_ok=True)
     df.to_csv(os.path.join(ROOT, "results", "pid_tuning.csv"), index=False)
     print("\nBest on training patients (3 days each): "
           f"GRI {df.loc[best_idx, 'train3_gri']:.1f}, TIR {df.loc[best_idx, 'train3_tir']:.1f}%, "
