@@ -44,7 +44,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from diabetes_rl.algos import RECURRENT, PolicyRunner, load_model
-from diabetes_rl.baselines import BasalBolusController, BasalController, PIDController
+from diabetes_rl.baselines import BasalBolusController, BasalController, BasalPIDController, PIDController
 from diabetes_rl.config import env_kwargs, find_run_config
 from diabetes_rl.envs import make_env, STEPS_PER_DAY
 from diabetes_rl.metrics import CONSENSUS_TARGETS, glycemic_metrics
@@ -56,10 +56,10 @@ RESULTS_DIR = os.path.join(PROJECT_ROOT, "results")
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
 
 DEFAULT_PATIENTS = ["adolescent#001", "adult#001", "child#001"]
-LABELS = {"random": "Random", "pid": "PID", "basal": "Basal only", "bb": "BB (meals)",
-          "agent": "Agent", "ensemble": "Ensemble"}
-COLORS = {"random": "#9e9e9e", "pid": "#1f77b4", "basal": "#8c564b", "bb": "#2ca02c",
-          "agent": "#d62728", "ensemble": "#9467bd"}
+LABELS = {"random": "Random", "pid": "PID", "bpid": "Basal PID", "basal": "Basal only",
+          "bb": "BB (meals)", "agent": "Agent", "ensemble": "Ensemble"}
+COLORS = {"random": "#9e9e9e", "pid": "#1f77b4", "bpid": "#17becf", "basal": "#8c564b",
+          "bb": "#2ca02c", "agent": "#d62728", "ensemble": "#9467bd"}
 
 
 def env_id(kind, patient, seed):  # registration-safe env ids (unique per seed)
@@ -112,13 +112,16 @@ def main():
     p.add_argument("--algo", default=None, help="override the algorithm stored in config.json")
     p.add_argument("--no-agent", action="store_true", help="skip the RL agent(s)")
     p.add_argument("--with-bb", action="store_true", help="add the meal-announced basal-bolus reference")
+    p.add_argument("--with-basal-pid", action="store_true",
+                   help="add the basal-scaled PID (BasalPIDController, tuned gains)")
     p.add_argument("--shield", action="store_true", help="put the PLGS safety shield in front of every controller")
     p.add_argument("--out", default=os.path.join(RESULTS_DIR, "benchmark.csv"))
     args = p.parse_args()
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
 
-    controllers = ["random", "pid", "basal"] + (["bb"] if args.with_bb else [])
+    controllers = (["random", "pid"] + (["bpid"] if args.with_basal_pid else []) + ["basal"]
+                   + (["bb"] if args.with_bb else []))
     runners, cfg = [], None
     if not args.no_agent:
         for path in args.model:
@@ -169,6 +172,8 @@ def main():
                     elif ctrl == "pid":
                         pid = PIDController(target=120.0, action_high=float(env.action_space.high[0]))
                         policy = lambda o, i, c=pid: c.act(float(o[0]))
+                    elif ctrl == "bpid":
+                        policy = lambda o, i, c=BasalPIDController(patient): c.act(float(o[0]))
                     elif ctrl == "basal":
                         policy = lambda o, i, c=BasalController(patient): c.act(float(o[0]))
                     else:  # bb

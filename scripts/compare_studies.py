@@ -48,7 +48,9 @@ TAG_LABELS = {
     "v2-rppo": "RecurrentPPO, v2 env",
     "v2-tqc-shield": "TQC, v2 env, shield in training",
 }
-BASELINES = {"pid": "PID (repo)", "basal": "Prescribed basal only", "bb": "Basal-bolus, meals announced*"}
+BASELINES = {"pid": "PID (repo)", "bpid": "PID scaled to basal, tuned",
+             "basal": "Prescribed basal only", "bb": "Basal-bolus, meals announced*"}
+EXTRA_BASELINES = "_baselines"  # results/study/_baselines[__shield]/*.csv (benchmark.py --no-agent)
 METRICS = {"tir": "time_in_range_pct", "tbr": "time_hypo_pct", "tbr54": "time_severe_hypo_pct",
            "tar": "time_hyper_pct", "gri": "gri", "surv": "survived"}
 
@@ -110,8 +112,14 @@ def summarize(tags, shield):
         if baseline_rows is None and base is not None and not base.empty:
             baseline_rows = base.drop_duplicates(["controller", "patient", "seed"])
         rows.append((tag, agent, ens))
+    extra = sorted(glob.glob(os.path.join(STUDY, EXTRA_BASELINES + (SHIELD if shield else ""), "*.csv")))
+    if extra:
+        more = pd.concat([pd.read_csv(f) for f in extra], ignore_index=True)
+        more = more[more.controller.isin(BASELINES)]
+        baseline_rows = more if baseline_rows is None else pd.concat([baseline_rows, more], ignore_index=True)
     if baseline_rows is None:
         return None, None
+    baseline_rows = baseline_rows.drop_duplicates(["controller", "patient", "seed"])
     pid_days = per_day(baseline_rows[baseline_rows.controller == "pid"])
 
     table, fig_rows = [], []
@@ -150,6 +158,40 @@ def summarize(tags, shield):
                               surv=f"{100 * e['surv']:.0f}%", target="-", vs_pid=_fmt_test(m1, p1, m2, p2)))
             fig_rows.append(dict(label=label.strip(), kind="ensemble", tir=[e["tir"]], tbr=[e["tbr"]]))
     return pd.DataFrame(table), fig_rows
+
+
+def by_cohort(tags, shield):
+    """Markdown table: mean TIR / TBR per patient cohort (agents averaged over seeds)."""
+    groups = []
+    base = None
+    for tag in tags:
+        agent, b, ens = load_tag(tag, shield)
+        if agent is None or agent.empty:
+            continue
+        base = b if base is None else base
+        groups.append((TAG_LABELS.get(tag, tag), agent))
+        if ens is not None and not ens.empty:
+            groups.append((f"{TAG_LABELS.get(tag, tag)}: ensemble", ens))
+    extra = sorted(glob.glob(os.path.join(STUDY, EXTRA_BASELINES + (SHIELD if shield else ""), "*.csv")))
+    frames = ([base] if base is not None else []) + [pd.read_csv(f) for f in extra]
+    if frames:
+        allb = pd.concat(frames, ignore_index=True).drop_duplicates(["controller", "patient", "seed"])
+        groups = [(lbl, allb[allb.controller == c]) for c, lbl in BASELINES.items()
+                  if (allb.controller == c).any()] + groups
+    if not groups:
+        return ""
+    cohorts = ["child", "adolescent", "adult"]
+    head = ["Controller"] + [f"{c} TIR / TBR" for c in cohorts]
+    lines = ["| " + " | ".join(head) + " |", "|" + "----|" * len(head)]
+    for label, df in groups:
+        df = df.assign(cohort=df.patient.str.split("#").str[0])
+        days = df.groupby(["cohort", "patient", "seed"])[[METRICS["tir"], METRICS["tbr"]]].mean()
+        cells = []
+        for c in cohorts:
+            d = days.loc[c] if c in days.index.get_level_values(0) else None
+            cells.append("-" if d is None else f"{d[METRICS['tir']].mean():.0f}% / {d[METRICS['tbr']].mean():.1f}%")
+        lines.append("| " + " | ".join([label.replace("*", "")] + cells) + " |")
+    return "\n".join(lines)
 
 
 def _fmt_test(m_tir, p_tir, m_tbr, p_tbr):
@@ -242,7 +284,7 @@ def main():
     STUDY = args.study_dir
 
     found = sorted(d for d in os.listdir(STUDY) if os.path.isdir(os.path.join(STUDY, d))
-                   and SHIELD not in d) if os.path.isdir(STUDY) else []
+                   and SHIELD not in d and not d.startswith("_")) if os.path.isdir(STUDY) else []
     tags = args.tags or sorted(found, key=lambda t: (ORDER.index(t) if t in ORDER else len(ORDER), t))
 
     md = []
@@ -253,6 +295,8 @@ def main():
         title = ("Held-out test patients (6 patients x 5 days), "
                  + ("every controller behind the safety shield" if shield else "no shield"))
         md.append(to_markdown(table, title))
+        md.append("**By patient cohort** (" + ("shielded" if shield else "no shield") + ")\n\n"
+                  + by_cohort(tags, shield))
         figure(fig_rows, out, title)
     if not md:
         sys.exit(f"no study results under {STUDY}")
