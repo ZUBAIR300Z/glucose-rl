@@ -251,9 +251,30 @@ is worth about **one step** of severe hypoglycemia (Magni risk ≈ 84 at
 ### More algorithms (`--algo`, `diabetes_rl/algos.py`)
 
 `sac` (original), `td3`, **`tqc`** (truncated quantile critics: curbs the
-Q-overestimation that shows up here as over-dosing), **`crossq`** (much more
-sample-efficient: the simulator, at ~100–200 steps/s/core, is the bottleneck),
-`ppo`, and **`recurrentppo`** (LSTM memory for unobserved meals / insulin).
+Q-overestimation that shows up here as over-dosing), **`crossq`** (more
+sample-efficient per environment step, but its wide critics make each update
+~4× costlier than SAC's on a CPU), `ppo`, and **`recurrentppo`** (LSTM memory
+for unobserved meals / insulin).
+
+### ~11× faster simulator (`diabetes_rl/fastsim.py`)
+
+Profiling showed ~90% of simglucose's time was not physics: its ODE reads ~40
+patient parameters as attributes of a pandas Series on every derivative
+evaluation. `fastsim` hands the solver plain floats while it integrates
+(31 → ~350 simulator steps/s per core). Parameter values are bit-identical;
+the insulin dose is carried as a float64 instead of a 1-element float32
+array, which moved blood glucose by at most 0.0002 mg/dL over 12 simulated
+days with identical TIR/TBR. It is on by default (`DIABETES_RL_FASTSIM=0`
+turns it off) and a unit test compares it against simglucose's own step. A
+500k-step study run now takes about 1–2 CPU-hours instead of 10+.
+
+### A stronger classical baseline (`BasalPIDController`, `scripts/tune_pid.py`)
+
+A PID that doses *around the patient's prescribed basal rate*, with
+per-patient scaling, anti-windup and a least-squares trend: the same
+information the v2 agent has. Its gains are tuned by random search on the
+**training** patients only (Glycemia Risk Index objective), never on test
+patients.
 
 ### Evaluation upgrades (`scripts/benchmark.py`)
 
@@ -273,8 +294,15 @@ sample-efficient: the simulator, at ~100–200 steps/s/core, is the bottleneck),
 python -m pytest -q
 python scripts/run_study.py --env-version v2 --algo tqc --tag v2-tqc --ensemble --shield-eval --with-bb
 python scripts/run_study.py --env-version v2 --algo crossq --tag v2-crossq --ensemble
-python scripts/plot_study.py --tag v2-tqc --out docs/study_v2_tqc.png
+python scripts/tune_pid.py --candidates 60          # tuned classical baseline
+python scripts/compare_studies.py                   # every configuration side by side
 ```
+
+Long runs are **resumable**: `train_pooled.py` snapshots the model, replay
+buffer and validation history every 25k steps (`--resume-freq`), and simply
+rerunning the same command continues from the last snapshot. When several
+runs share one machine, `--vec-env dummy` keeps each run's environments
+in-process (one PyTorch process per run instead of one per environment).
 
 ## Project Structure
 
@@ -285,8 +313,9 @@ diabetes_rl/                  reusable package
 ├── cohorts.py                patient cohorts + train/validation/test splits
 ├── patients.py               per-patient basal rate, CR, CF (pump settings)
 ├── rewards.py                asymmetric reward functions (Magni, zone)
-├── baselines.py              PID, prescribed-basal and basal-bolus controllers
+├── baselines.py              PID, basal-scaled PID, prescribed-basal, basal-bolus
 ├── safety.py                 predictive low-glucose-suspend safety shield
+├── fastsim.py                ~11x faster simglucose, same results
 ├── algos.py                  SAC / TD3 / TQC / CrossQ / PPO / RecurrentPPO factory
 ├── config.py                 run config.json -> identical eval env
 ├── metrics.py                glycemic metrics (TIR, TBR, CV, LBGI/HBGI, GRI)
@@ -300,6 +329,8 @@ scripts/
 ├── evaluate.py               agent vs PID, head-to-head plot
 ├── benchmark.py              baselines vs agent(s)/ensemble (+ shield, significance test)
 ├── run_study.py              train + benchmark several seeds end to end
+├── compare_studies.py        all configurations side by side (table + figure)
+├── tune_pid.py               tune the basal-scaled PID on training patients
 ├── plot_study.py             multi-seed study figure
 └── plot_training.py          learning curve from the eval logs
 tests/                        fast unit tests (python -m pytest -q)
