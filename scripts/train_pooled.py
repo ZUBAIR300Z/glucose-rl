@@ -77,6 +77,9 @@ def main():
                    help="experiment name; outputs go to models/pooled/<tag>/")
     p.add_argument("--checkpoint-freq", type=int, default=50_000)
     p.add_argument("--eval-freq", type=int, default=25_000)
+    p.add_argument("--vec-env", default="auto", choices=["auto", "subproc", "dummy"],
+                   help="subproc = one process per env (fastest for a single run); dummy = all envs "
+                        "in-process (far less memory; best when several runs share the CPU)")
     args = p.parse_args()
 
     out_dir = os.path.join(MODELS_DIR, args.tag)
@@ -106,7 +109,8 @@ def main():
         f.write("test," + ",".join(test_patients) + "\n")
 
     fns = [make_train_fn(i, train_patients, cfg, args.seed) for i in range(args.n_envs)]
-    env = SubprocVecEnv(fns) if args.n_envs > 1 else DummyVecEnv(fns)
+    use_subproc = args.vec_env == "subproc" or (args.vec_env == "auto" and args.n_envs > 1)
+    env = SubprocVecEnv(fns) if use_subproc else DummyVecEnv(fns)
 
     eval_env = Monitor(make_glucose_env(
         env_id=f"simglucose/pooled-val-{args.tag}-s{args.seed}-v0",

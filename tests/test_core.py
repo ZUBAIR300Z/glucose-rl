@@ -110,6 +110,19 @@ def test_basal_and_basal_bolus_controllers():
     assert float(bb.act(120.0, {"meal": 10.0, "sample_time": 3.0})[0]) > basal_rate("adult#001")
 
 
+def test_basal_pid_doses_around_prescribed_basal():
+    from diabetes_rl.baselines import BasalPIDController
+    b = basal_rate("child#008")
+    c = BasalPIDController("child#008", target=120.0, kp=0.01, ki=0.0, kd=0.0, max_multiplier=5.0)
+    assert float(c.act(120.0)[0]) == pytest.approx(b, rel=1e-6)      # at target -> basal
+    c.reset()
+    assert float(c.act(220.0)[0]) == pytest.approx(2.0 * b, rel=1e-6)  # +100 mg/dL -> 2x basal
+    c.reset()
+    assert float(c.act(10.0)[0]) == 0.0                                # far below -> suspend
+    c.reset()
+    assert float(c.act(5000.0)[0]) == pytest.approx(5.0 * b, rel=1e-6)  # capped at max_multiplier
+
+
 def test_basal_rates_vary_across_population():
     rates = [basal_rate(p) for p in ALL_PATIENTS]
     assert max(rates) / min(rates) > 5  # why absolute action ranges are a problem

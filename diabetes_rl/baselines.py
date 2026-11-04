@@ -59,6 +59,44 @@ class PIDController:
         return np.array([u], dtype=np.float32)
 
 
+class BasalPIDController:
+    """PID that doses *around the prescribed basal rate*, scaled per patient.
+
+    dose = basal * clip(1 + kp*e + ki*I + kd*slope, 0, max_multiplier)
+    with e = CGM - target (mg/dL), I the integral of e (clamped: anti-windup)
+    and slope the least-squares CGM trend over the last 15 min (mg/dL/min).
+
+    It uses exactly the information the v2 RL agent has (CGM + the patient's
+    prescribed basal rate), which makes it the fair classical rival for v2.
+    Defaults come from scripts/tune_pid.py (random search on TRAINING
+    patients only; never on the test patients).
+    """
+
+    def __init__(self, patient_name: str, target=120.0, kp=0.01, ki=1e-4, kd=0.5,
+                 max_multiplier=5.0, sample_time=3.0):
+        self.basal = therapy_params(patient_name)["basal"]
+        self.target, self.kp, self.ki, self.kd = target, kp, ki, kd
+        self.max_multiplier, self.sample_time = max_multiplier, sample_time
+        self.reset()
+
+    def reset(self):
+        self.integral = 0.0
+        self.hist = []
+
+    def act(self, cgm: float, info=None) -> np.ndarray:
+        e = cgm - self.target
+        self.hist = (self.hist + [cgm])[-5:]
+        slope = 0.0
+        if len(self.hist) >= 2:
+            t = np.arange(len(self.hist)) * self.sample_time
+            slope = float(np.polyfit(t, self.hist, 1)[0])
+        # anti-windup: keep the integral's contribution within the dose limits
+        lim = self.max_multiplier / max(self.ki, 1e-12)
+        self.integral = float(np.clip(self.integral + e, -lim, lim))
+        m = 1.0 + self.kp * e + self.ki * self.integral + self.kd * slope
+        return np.array([self.basal * float(np.clip(m, 0.0, self.max_multiplier))], dtype=np.float32)
+
+
 class BasalController:
     """Deliver the patient's prescribed basal rate, ignoring CGM (open loop).
 
