@@ -38,10 +38,11 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STUDY = os.path.join(ROOT, "results", "study")
 SHIELD = "__shield"
 
-ORDER = ["v1-sac", "v2-sac", "v2-tqc", "v2-crossq", "v2-ppo", "v2-rppo", "v2-tqc-shield"]
+ORDER = ["v1-sac", "v2-sac", "v2-sac-m8", "v2-tqc", "v2-crossq", "v2-ppo", "v2-rppo", "v2-tqc-shield"]
 TAG_LABELS = {
     "v1-sac": "SAC, v1 env (original setup)",
     "v2-sac": "SAC, v2 env",
+    "v2-sac-m8": "SAC, v2 env, dose cap 8x basal",
     "v2-tqc": "TQC, v2 env",
     "v2-crossq": "CrossQ, v2 env",
     "v2-ppo": "PPO, v2 env",
@@ -99,7 +100,7 @@ def wilcoxon_vs(a_days, b_days, col):
     d = (a_days.loc[common, col] - b_days.loc[common, col]).to_numpy()
     if len(d) < 6 or not np.any(d != 0):
         return float("nan"), float("nan")
-    return float(np.median(d)), float(wilcoxon(d).pvalue)
+    return float(np.mean(d)), float(wilcoxon(d).pvalue)  # mean paired difference, Wilcoxon p
 
 
 def summarize(tags, shield):
@@ -121,6 +122,15 @@ def summarize(tags, shield):
         return None, None
     baseline_rows = baseline_rows.drop_duplicates(["controller", "patient", "seed"])
     pid_days = per_day(baseline_rows[baseline_rows.controller == "pid"])
+    bpid_rows = baseline_rows[baseline_rows.controller == "bpid"]
+    bpid_days = per_day(bpid_rows) if not bpid_rows.empty else None
+
+    def vs_bpid(days):
+        if bpid_days is None:
+            return "-"
+        m1, p1 = wilcoxon_vs(days, bpid_days, METRICS["tir"])
+        m2, p2 = wilcoxon_vs(days, bpid_days, METRICS["tbr"])
+        return _fmt_test(m1, p1, m2, p2)
 
     table, fig_rows = [], []
     for c, label in BASELINES.items():
@@ -130,7 +140,7 @@ def summarize(tags, shield):
         v = {k: b[col].mean() for k, col in METRICS.items()}
         table.append(dict(config=label, seeds="-", tir=f"{v['tir']:.1f}", tbr=f"{v['tbr']:.1f}",
                           tbr54=f"{v['tbr54']:.1f}", gri=f"{v['gri']:.0f}", surv=f"{100 * v['surv']:.0f}%",
-                          target="-", vs_pid="-"))
+                          target="-", vs_pid="-", vs_bpid="-"))
         fig_rows.append(dict(label=label, kind="baseline", tir=[v["tir"]], tbr=[v["tbr"]]))
 
     for tag, agent, ens in rows:
@@ -144,7 +154,7 @@ def summarize(tags, shield):
             tbr54=f"{seeds[METRICS['tbr54']].mean():.1f}", gri=f"{seeds[METRICS['gri']].mean():.0f}",
             surv=f"{100 * seeds[METRICS['surv']].mean():.0f}%",
             target=f"{int((tbr < 4.0).sum())}/{len(seeds)}",
-            vs_pid=_fmt_test(med_tir, p_tir, med_tbr, p_tbr)))
+            vs_pid=_fmt_test(med_tir, p_tir, med_tbr, p_tbr), vs_bpid=vs_bpid(per_day(agent))))
         fig_rows.append(dict(label=TAG_LABELS.get(tag, tag), kind="agent",
                              tir=list(tir), tbr=list(tbr)))
         if ens is not None and not ens.empty:
@@ -155,7 +165,8 @@ def summarize(tags, shield):
             label = f"  \u21b3 ensemble of {len(seeds)} seeds (median dose)"
             table.append(dict(config=label, seeds="-", tir=f"{e['tir']:.1f}", tbr=f"{e['tbr']:.1f}",
                               tbr54=f"{e['tbr54']:.1f}", gri=f"{e['gri']:.0f}",
-                              surv=f"{100 * e['surv']:.0f}%", target="-", vs_pid=_fmt_test(m1, p1, m2, p2)))
+                              surv=f"{100 * e['surv']:.0f}%", target="-", vs_pid=_fmt_test(m1, p1, m2, p2),
+                              vs_bpid=vs_bpid(e_days)))
             fig_rows.append(dict(label=label.strip(), kind="ensemble", tir=[e["tir"]], tbr=[e["tbr"]]))
     return pd.DataFrame(table), fig_rows
 
@@ -203,11 +214,14 @@ def _fmt_test(m_tir, p_tir, m_tbr, p_tbr):
 
 def to_markdown(df, title):
     head = ["Controller", "Seeds", "TIR 70-180 % ↑", "TBR <70 % ↓", "TBR <54 % ↓", "GRI ↓",
-            "Survived", "Seeds with TBR <4%", "vs PID: median paired diff (Wilcoxon)"]
-    lines = [f"**{title}**", "", "| " + " | ".join(head) + " |", "|" + "----|" * len(head)]
+            "Survived", "Seeds with TBR <4%", "vs PID (repo): mean paired diff",
+            "vs tuned basal PID: mean paired diff"]
+    lines = [f"**{title}**", "", "Paired over the same patient-days (agents averaged over seeds); "
+             "p from a Wilcoxon signed-rank test, * = p < 0.05.", "",
+             "| " + " | ".join(head) + " |", "|" + "----|" * len(head)]
     for _, r in df.iterrows():
         lines.append("| " + " | ".join([r.config, r.seeds, r.tir, r.tbr, r.tbr54, r.gri, r.surv,
-                                         r.target, r.vs_pid]) + " |")
+                                         r.target, r.vs_pid, r.vs_bpid]) + " |")
     return "\n".join(lines)
 
 
