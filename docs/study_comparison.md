@@ -23,6 +23,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 |   ↳ ensemble of 5 seeds (median dose) | - | 76.1 | 1.0 | 0.3 | 28 | 90% | - | TIR +21.5 (p=0.000)*; TBR -10.2 (p=0.000)* | TIR +0.0 (p=0.353); TBR -1.0 (p=0.116) |
 | Residual SAC on tuned PID (scale 1.0) | 3 | 74.7 ± 1.2 | 0.8 ± 0.1 | 0.3 | 29 | 90% | 3/3 | TIR +20.1 (p=0.000)*; TBR -10.4 (p=0.000)* | TIR -1.4 (p=0.041)*; TBR -1.2 (p=0.075) |
 |   ↳ ensemble of 3 seeds (median dose) | - | 75.2 | 0.9 | 0.2 | 28 | 90% | - | TIR +20.7 (p=0.000)*; TBR -10.4 (p=0.000)* | TIR -0.9 (p=0.063); TBR -1.2 (p=0.075) |
+| Residual SAC on tuned PID, zone reward | 4 | 77.5 ± 0.8 | 2.5 ± 0.5 | 0.8 | 29 | 92% | 4/4 | TIR +23.0 (p=0.000)*; TBR -8.8 (p=0.001)* | TIR +1.4 (p=0.001)*; TBR +0.4 (p=0.333) |
+|   ↳ ensemble of 4 seeds (median dose) | - | 77.8 | 2.2 | 0.9 | 28 | 93% | - | TIR +23.3 (p=0.000)*; TBR -9.0 (p=0.001)* | TIR +1.7 (p=0.000)*; TBR +0.2 (p=0.735) |
 
 **By patient cohort** (no shield)
 
@@ -47,6 +49,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 | Residual SAC on tuned PID (scale 0.5): ensemble | 76% / 3.1% | 74% / 0.0% | 78% / 0.0% |
 | Residual SAC on tuned PID (scale 1.0) | 76% / 2.5% | 73% / 0.0% | 75% / 0.0% |
 | Residual SAC on tuned PID (scale 1.0): ensemble | 77% / 2.6% | 74% / 0.0% | 75% / 0.0% |
+| Residual SAC on tuned PID, zone reward | 72% / 6.8% | 76% / 0.6% | 85% / 0.0% |
+| Residual SAC on tuned PID, zone reward: ensemble | 71% / 6.8% | 77% / 0.0% | 85% / 0.0% |
 
 **Held-out test patients (6 patients x 5 days), every controller behind the safety shield**
 
@@ -73,6 +77,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 |   ↳ ensemble of 5 seeds (median dose) | - | 76.0 | 1.0 | 0.3 | 28 | 90% | - | TIR +21.0 (p=0.000)*; TBR -10.0 (p=0.000)* | TIR -0.0 (p=0.354); TBR -0.9 (p=0.116) |
 | Residual SAC on tuned PID (scale 1.0) | 3 | 74.6 ± 1.2 | 0.8 ± 0.2 | 0.2 | 29 | 90% | 3/3 | TIR +19.6 (p=0.000)*; TBR -10.2 (p=0.000)* | TIR -1.5 (p=0.039)*; TBR -1.2 (p=0.075) |
 |   ↳ ensemble of 3 seeds (median dose) | - | 75.2 | 0.9 | 0.2 | 28 | 90% | - | TIR +20.2 (p=0.000)*; TBR -10.2 (p=0.000)* | TIR -0.9 (p=0.063); TBR -1.1 (p=0.075) |
+| Residual SAC on tuned PID, zone reward | 4 | 77.4 ± 0.8 | 2.5 ± 0.4 | 0.8 | 29 | 92% | 4/4 | TIR +22.4 (p=0.000)*; TBR -8.5 (p=0.001)* | TIR +1.3 (p=0.003)*; TBR +0.5 (p=0.333) |
+|   ↳ ensemble of 4 seeds (median dose) | - | 77.7 | 2.3 | 0.9 | 29 | 93% | - | TIR +22.7 (p=0.000)*; TBR -8.7 (p=0.002)* | TIR +1.6 (p=0.001)*; TBR +0.3 (p=0.678) |
 
 **By patient cohort** (shielded)
 
@@ -97,3 +103,5 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 | Residual SAC on tuned PID (scale 0.5): ensemble | 76% / 3.1% | 74% / 0.0% | 78% / 0.0% |
 | Residual SAC on tuned PID (scale 1.0) | 76% / 2.5% | 73% / 0.0% | 75% / 0.0% |
 | Residual SAC on tuned PID (scale 1.0): ensemble | 77% / 2.6% | 74% / 0.0% | 75% / 0.0% |
+| Residual SAC on tuned PID, zone reward | 71% / 7.0% | 76% / 0.5% | 85% / 0.0% |
+| Residual SAC on tuned PID, zone reward: ensemble | 71% / 7.0% | 77% / 0.0% | 85% / 0.0% |

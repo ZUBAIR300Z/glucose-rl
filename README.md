@@ -44,7 +44,9 @@ UVA/Padova Type-1 Diabetes simulator.**
 > matches that PID on the 6 held-out patients: **76.0% vs 76.1% time in range,
 > with 1.1% vs 2.1% time below range** (5 training seeds, all meeting the
 > < 4% target). Plain SAC on the same environment stays 4.9 TIR points lower
-> at the same hypoglycemia. See [v2](#v2-review-fixes-and-a-redesigned-agent)
+> at the same hypoglycemia. Trained with a TIR-oriented reward, the residual
+> agent beats the PID's time in range (+1.4 points, p = 0.001), but at the
+> cost of more hypoglycemia in children. See [v2](#v2-review-fixes-and-a-redesigned-agent)
 > and [Residual RL](#residual-rl-on-top-of-the-tuned-pid). The sections below
 > keep the original study as it was reported.
 
@@ -229,8 +231,8 @@ alone would not fix. Methodology fixes are on by default; everything that
 would change the original setup is **opt-in** (`--env-version v2`, `--algo`,
 `--shield`), so the v1 results stay reproducible.
 
-> **Status:** 31 training runs completed: the 21 runs of the first v2 study,
-> seed 4 of v2-SAC and of the 8x-cap variant, and 8 residual-RL runs
+> **Status:** 35 training runs completed: the 21 runs of the first v2 study,
+> seed 4 of v2-SAC and of the 8x-cap variant, and 12 residual-RL runs
 > (RecurrentPPO seed 2 and CrossQ were not run). All models were trained and
 > scored with the code in this repository.
 
@@ -258,6 +260,8 @@ seeds of a configuration.
 | **Residual SAC on the tuned PID** (`--residual 0.5`) | 5 | **76.0% ± 1.2** | **1.1% ± 0.3** | 0.4% | **28** | 91% | –0.1 (p = 0.48) |
 | ↳ ensemble of the 5 seeds | – | 76.1% | 1.0% | 0.3% | 28 | 90% | +0.0 (p = 0.35) |
 | Residual SAC, scale 1.0 (ablation) | 3 | 74.7% ± 1.2 | 0.8% ± 0.1 | 0.3% | 29 | 90% | –1.4 (p = 0.041) |
+| Residual SAC, zone reward (ablation) | 4 | 77.5% ± 0.8 | 2.5% ± 0.5 | 0.8% | 29 | 92% | **+1.4 (p = 0.001)** |
+| ↳ ensemble of the 4 seeds | – | 77.8% | 2.2% | 0.9% | 28 | 93% | +1.7 |
 
 GRI = Glycemia Risk Index (0–100, a composite of time low and time high;
 lower is better).
@@ -296,13 +300,26 @@ lower is better).
    hypoglycemia** (p < 0.001, better on 28 of 30 days; GRI −4.4,
    p < 0.001), and its 5 seeds agree closely (± 1.2 TIR). See
    [Residual RL](#residual-rl-on-top-of-the-tuned-pid).
+7. **The reward sets the trade-off, and the averages hide who pays for
+   it.** The Magni risk used everywhere costs as much at 70 mg/dL as at
+   ~280 mg/dL, so agents trade time in range for fewer lows. With the
+   repository's TIR-oriented `zone` reward the residual agent **beats the
+   tuned PID on time in range**: +1.4 points (p = 0.001, higher on 23 of 30
+   days), 77.5% vs 76.1%, at similar overall hypoglycemia (2.5% vs 2.1%,
+   n.s.). But by cohort the gain is all in adults (85% vs 80% TIR), while
+   children get *more* hypoglycemia (6.8% vs 5.0% TBR) and severe lows rise
+   to 0.8% (vs 0.3%; still under the 1% target). The Magni-reward residual
+   agent is the safer controller: it brings the children under the 4%
+   hypoglycemia target (3.4% vs the PID's 5.0%) while matching the PID's
+   overall TIR (plain v2-SAC also keeps children under 4%, but at 5 TIR
+   points less).
 
 **What would most likely help next:** meal announcement (the basal-bolus
 reference shows the value of meal information; residual RL on top of a
-meal-aware controller is the natural next step), constrained RL with an
-explicit TBR < 4% constraint instead of reward shaping, and a reward that
-values time in range directly (the Magni risk used here costs as much at
-70 mg/dL as at ~280 mg/dL, so agents trade time in range for fewer lows).
+meal-aware controller is the natural next step), and constrained RL with an
+explicit TBR < 4% constraint per patient group instead of reward shaping:
+finding 7 shows a single averaged objective lets an agent trade one group's
+safety for another group's time in range.
 
 Full tables, including per-cohort results and the evaluation with every
 controller behind the safety shield, are in
@@ -576,8 +593,10 @@ tensorboard --logdir logs
     controller, constrained RL, a reward that values time in range
 -   [ ] RecurrentPPO seed 2 and CrossQ (supported by `train_pooled.py`;
     runs are resumable)
--   [ ] Ablations: v1 vs v2 state; absolute vs basal-relative action; reward
-    (Magni vs zone); shield during training vs evaluation only
+-   [x] Residual ablations: scale 0.5 vs 1.0; Magni vs zone reward (zone
+    beats the PID on TIR, at a cost in the children's hypoglycemia)
+-   [ ] Ablations: v1 vs v2 state; absolute vs basal-relative action;
+    shield during training vs evaluation only
 -   [ ] Constrained RL (maximize TIR subject to TBR < 4%, e.g. Lagrangian SAC/PPO)
 -   [ ] Meal-announced (hybrid closed-loop) agent, compared against basal-bolus
 -   [ ] Validate from-scratch SAC matches Stable-Baselines3
