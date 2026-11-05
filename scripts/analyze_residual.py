@@ -1,7 +1,8 @@
 """
-What did the residual agent learn? Runs the tuned basal PID and a residual RL
-agent (ResidualPIDWrapper, ``--residual``) on the same held-out test days and
-shows *where* the agent overrides the PID.
+What did the residual agent learn? Runs a residual RL agent (``--residual``) and
+its base controller alone (the tuned basal PID, or meal-announced basal-bolus
+with ``--residual-base bb``) on the same held-out test days and shows *where*
+the agent overrides it.
 
     a) an example day (--example: the median TIR gain [default], the largest
        drop in time below range, or the largest TIR loss; the panel title says which)
@@ -35,7 +36,7 @@ from diabetes_rl.cohorts import train_val_test_split
 from diabetes_rl.config import env_kwargs, find_run_config
 from diabetes_rl.envs import STEPS_PER_DAY
 from diabetes_rl.metrics import glycemic_metrics
-from diabetes_rl.wrappers import action_to_multiplier, make_glucose_env
+from diabetes_rl.wrappers import make_glucose_env
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 # validated categorical slots 1-2 (dataviz reference palette) + recessive ink/surface
@@ -46,14 +47,13 @@ EXAMPLES = {"median": "median TIR gain", "max-tbr-drop": "largest TBR drop", "wo
 
 
 def run_day(cfg, patient, seed, runners=None):
-    """One test day; ``runners=None`` -> zero correction (= the tuned PID)."""
+    """One test day; ``runners=None`` -> zero correction (= the base controller alone)."""
     env = make_glucose_env(env_id=f"simglucose/resid-{patient.replace('#', '')}-s{seed}-{bool(runners)}-v0",
                            patient_name=patient, env_seed=seed, **env_kwargs(cfg))
     obs, info = env.reset(seed=seed)
     for r in runners or []:
         r.reset()
-    mm = cfg["max_multiplier"]
-    rec = {k: [] for k in ("minute", "cgm", "bg", "pid_mult", "dose_mult")}
+    rec = {k: [] for k in ("minute", "cgm", "bg", "base_mult", "dose_mult")}
     survived = True
     for _ in range(STEPS_PER_DAY):
         minute, cgm = env.minute_of_day, float(env.cgm_hist[-1])
@@ -63,8 +63,8 @@ def run_day(cfg, patient, seed, runners=None):
         rec["minute"].append(minute)
         rec["cgm"].append(cgm)
         rec["bg"].append(float(info["bg"]))
-        rec["pid_mult"].append(action_to_multiplier(info["pid_action"], mm))
-        rec["dose_mult"].append(action_to_multiplier(info["final_action"], mm))
+        rec["base_mult"].append(info["base_mult"])
+        rec["dose_mult"].append(info["dose_mult"])
         if term:
             survived = False
             break
@@ -103,6 +103,7 @@ def main():
     cfg = find_run_config(args.model[0])
     if not cfg.get("residual"):
         sys.exit("not a residual model (config.json has no 'residual' > 0)")
+    base = "Tuned PID" if (cfg.get("residual_base") or "pid") == "pid" else "Basal-bolus"
     runners = [PolicyRunner(load_model(cfg["algo"], m), recurrent=cfg["algo"] in RECURRENT)
                for m in args.model]
     patients = args.patients or train_val_test_split(2, 1, seed=0)[2]
@@ -112,7 +113,7 @@ def main():
         for s in range(args.seeds):
             pid, ag = run_day(cfg, pt, s), run_day(cfg, pt, s, runners)
             days.append((pt, s, pid, ag))
-            print(f"{pt:>15} day {s}: PID TIR {pid['metrics']['time_in_range_pct']:5.1f}% "
+            print(f"{pt:>15} day {s}: base TIR {pid['metrics']['time_in_range_pct']:5.1f}% "
                   f"TBR {pid['metrics']['time_hypo_pct']:4.1f}% | agent TIR "
                   f"{ag['metrics']['time_in_range_pct']:5.1f}% TBR {ag['metrics']['time_hypo_pct']:4.1f}%"
                   f"{'' if ag['survived'] else '  (agent day ended early)'}"
@@ -122,7 +123,7 @@ def main():
         return float(np.mean([(d[2] if who == "pid" else d[3])["metrics"][key] for d in days]))
     gains = np.array([d[3]["metrics"]["time_in_range_pct"] - d[2]["metrics"]["time_in_range_pct"] for d in days])
     ins_ratio = np.mean([d[3]["dose_mult"].mean() / max(d[2]["dose_mult"].mean(), 1e-9) for d in days])
-    print(f"\n{len(days)} days, {len(runners)} model(s): PID TIR {mean('time_in_range_pct', 'pid'):.1f}% "
+    print(f"\n{len(days)} days, {len(runners)} model(s): {base} TIR {mean('time_in_range_pct', 'pid'):.1f}% "
           f"TBR {mean('time_hypo_pct', 'pid'):.1f}% | residual agent TIR {mean('time_in_range_pct', 'agent'):.1f}% "
           f"TBR {mean('time_hypo_pct', 'agent'):.1f}% | TIR gain per day: median {np.median(gains):+.1f}, "
           f"better on {int((gains > 0).sum())}/{len(days)} days | mean insulin vs PID: {ins_ratio:.2f}x")
@@ -130,7 +131,7 @@ def main():
     # pooled corrections over every agent step
     minute = np.concatenate([d[3]["minute"] for d in days])
     cgm = np.concatenate([d[3]["cgm"] for d in days])
-    corr = np.concatenate([d[3]["dose_mult"] - d[3]["pid_mult"] for d in days])
+    corr = np.concatenate([d[3]["dose_mult"] - d[3]["base_mult"] for d in days])
 
     tbr_drop = np.array([d[2]["metrics"]["time_hypo_pct"] - d[3]["metrics"]["time_hypo_pct"] for d in days])
     pick = {"median": int(np.argmin(np.abs(gains - np.median(gains)))),
@@ -144,7 +145,7 @@ def main():
     style(a1, f"a) Example day: {pt}, day {s} ({EXAMPLES[args.example]})")
     a1.axhspan(70, 180, color="#e9f3ea", zorder=0)
     a1.text(hrs(pid)[-1], 72, "target 70-180 ", color=INK2, fontsize=8, va="bottom", ha="right")
-    for d, c, lab in ((pid, PID_C, "Tuned PID"), (ag, AGENT_C, "Residual agent")):
+    for d, c, lab in ((pid, PID_C, base), (ag, AGENT_C, "Residual agent")):
         m = d["metrics"]
         a1.plot(hrs(d), d["bg"], color=c, lw=1.8,
                 label=f"{lab}: TIR {m['time_in_range_pct']:.0f}%, TBR {m['time_hypo_pct']:.1f}%")
@@ -155,12 +156,14 @@ def main():
     a1.legend(frameon=False, fontsize=8.5, labelcolor=INK, loc="upper left", ncol=1)
 
     style(a2, "b) Same day: insulin dose")
-    for d, c, lab in ((pid, PID_C, "Tuned PID"), (ag, AGENT_C, "Residual agent")):
+    for d, c, lab in ((pid, PID_C, base), (ag, AGENT_C, "Residual agent")):
         a2.step(hrs(d), d["dose_mult"], where="post", color=c, lw=1.4, label=lab)
     a2.axhline(1.0, color=INK2, lw=0.8, ls=":")
+    if base != "Tuned PID":
+        a2.set_yscale("symlog", linthresh=2.0)  # meal boluses are ~50-150x basal
     a2.set_ylabel("dose (x prescribed basal; dotted = 1x)")
     a2.set_xlabel("time of day")
-    a2.set_ylim(0, 1.3 * max(pid["dose_mult"].max(), ag["dose_mult"].max()))
+    a2.set_ylim(0, (1.3 if base == "Tuned PID" else 3.0) * max(pid["dose_mult"].max(), ag["dose_mult"].max()))
     a2.legend(frameon=False, fontsize=8.5, labelcolor=INK, loc="upper left", ncol=2)
     for ax in (a1, a2):
         ax.xaxis.set_major_locator(matplotlib.ticker.MultipleLocator(3))
@@ -173,7 +176,7 @@ def main():
     a3.axhline(0, color=INK2, lw=0.8)
     a3.set_xticks(range(0, 24, 3))
     a3.set_xlabel("hour of day (simglucose meals cluster at ~7, ~12 and ~18-20 h)")
-    a3.set_ylabel("agent dose - PID dose (x basal)")
+    a3.set_ylabel(f"agent dose - {base} dose (x basal)")
 
     style(a4, "d) Mean correction by current glucose (CGM)")
     labels, vals, ns = [], [], []
@@ -193,9 +196,9 @@ def main():
     pad = 0.35 * (hi_ - lo_ or 1)
     a4.set_ylim(lo_ - pad, hi_ + pad)
     a4.set_xlabel("CGM at decision time (mg/dL)")
-    a4.set_ylabel("agent dose - PID dose (x basal)")
+    a4.set_ylabel(f"agent dose - {base} dose (x basal)")
 
-    fig.suptitle(f"What the residual agent changes on top of the tuned PID "
+    fig.suptitle(f"What the residual agent changes on top of {base.lower()} "
                  f"({len(runners)} model{'s, median dose' if len(runners) > 1 else ''}; held-out test patients)",
                  x=0.01, ha="left", fontsize=12, color=INK)
     fig.tight_layout(rect=(0, 0, 1, 0.96))

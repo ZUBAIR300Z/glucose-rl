@@ -14,7 +14,7 @@ from diabetes_rl.rewards import REWARD_FUNCTIONS
 
 LEGACY_CONFIG = dict(algo="sac", env_version="v1", reward="magni", history=None,
                      terminal_penalty=None, max_multiplier=5.0, gamma=0.99, shield=False,
-                     residual=0.0)
+                     residual=0.0, residual_base="pid")
 
 
 def env_kwargs(cfg: dict) -> dict:
@@ -22,7 +22,7 @@ def env_kwargs(cfg: dict) -> dict:
     return dict(env_version=cfg["env_version"], history_len=cfg["history"],
                 reward_fun=REWARD_FUNCTIONS[cfg["reward"]], terminal_penalty=cfg["terminal_penalty"],
                 max_multiplier=cfg["max_multiplier"], gamma=cfg["gamma"], shield=cfg["shield"],
-                residual=cfg.get("residual", 0.0) or 0.0)
+                residual=cfg.get("residual", 0.0) or 0.0, residual_base=cfg.get("residual_base") or "pid")
 
 
 def find_run_config(model_path: str) -> dict:

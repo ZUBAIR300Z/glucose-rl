@@ -39,7 +39,7 @@ STUDY = os.path.join(ROOT, "results", "study")
 SHIELD = "__shield"
 
 ORDER = ["v1-sac", "v2-sac", "v2-sac-m8", "v2-tqc", "v2-crossq", "v2-ppo", "v2-rppo", "v2-tqc-shield",
-         "v2-res-sac", "v2-res1-sac", "v2-res-sac-zone"]
+         "v2-res-sac", "v2-res1-sac", "v2-res-sac-zone", "v2-res-bb"]
 TAG_LABELS = {
     "v1-sac": "SAC, v1 env (original setup)",
     "v2-sac": "SAC, v2 env",
@@ -52,6 +52,7 @@ TAG_LABELS = {
     "v2-res-sac": "Residual SAC on tuned PID (scale 0.5)",
     "v2-res1-sac": "Residual SAC on tuned PID (scale 1.0)",
     "v2-res-sac-zone": "Residual SAC on tuned PID, zone reward",
+    "v2-res-bb": "Residual SAC on basal-bolus, meals announced*",
 }
 BASELINES = {"pid": "PID (repo)", "bpid": "PID scaled to basal, tuned",
              "basal": "Prescribed basal only", "bb": "Basal-bolus, meals announced*"}
@@ -283,7 +284,7 @@ def figure(fig_rows, out, title):
                Line2D([], [], ls="", marker="s", ms=6.5, color=MUTED, label="baseline (no learning)")]
     fig.legend(handles=handles, loc="upper left", ncol=4, frameon=False, fontsize=9,
                labelcolor=INK_2, bbox_to_anchor=(0.003, 1 - 0.46 / height))
-    fig.text(0.01, 0.12 / height, "* basal-bolus is told meal sizes; every other controller sees CGM only. "
+    fig.text(0.01, 0.12 / height, "* told meal sizes (announced meals); every other controller sees CGM only. "
              "Numbers beside each panel: mean.", color=MUTED, fontsize=8, va="bottom")
     os.makedirs(os.path.dirname(os.path.abspath(out)), exist_ok=True)
     fig.savefig(out, dpi=130, facecolor=SURFACE)

@@ -279,3 +279,40 @@ def test_zero_init_policy_head_makes_the_untrained_agent_output_zero():
             a, _ = model.predict(obs, deterministic=True)
             assert float(np.abs(a).max()) < 1e-6, algo
             obs, *_ = env.step(np.array([0.7], np.float32))
+
+
+def test_residual_bb_zero_action_reproduces_basal_bolus():
+    """Hybrid closed loop: action 0 = plain meal-announced basal-bolus."""
+    from diabetes_rl.wrappers import ResidualBBWrapper
+    patient, seed, n = "child#009", 0, 200          # covers at least one meal bolus
+    raw = make_env(env_id=_id(), patient_name=patient, env_seed=seed)
+    bb = BasalBolusController(patient)
+    obs, info = raw.reset()
+    bb_bg, boluses = [], 0
+    for _ in range(n):
+        dose = bb.act(float(obs[0]), info)
+        boluses += int(float(dose[0]) > 2 * basal_rate(patient))
+        obs, _, _, _, info = raw.step(dose)
+        bb_bg.append(info["bg"])
+    assert boluses > 0
+    env = make_glucose_env(_id(), patient_name=patient, env_seed=seed, env_version="v2",
+                           reward_fun=REWARD_FUNCTIONS["magni"], residual=1.0, residual_base="bb")
+    assert isinstance(env, ResidualBBWrapper)
+    obs, _ = env.reset()
+    res_bg = []
+    for _ in range(n):
+        obs, r, term, trunc, info = env.step(np.zeros(1, np.float32))
+        res_bg.append(info["bg"])
+        assert info["dose_mult"] == pytest.approx(info["base_mult"], rel=1e-6)
+        assert env.observation_space.contains(obs)
+    assert np.allclose(res_bg, bb_bg, rtol=1e-4)
+
+
+def test_residual_bb_scales_the_dose():
+    env = make_glucose_env(_id(), patient_name="adult#001", env_seed=0, env_version="v2",
+                           reward_fun=REWARD_FUNCTIONS["magni"], residual=1.0, residual_base="bb")
+    env.reset()
+    _, _, _, _, info = env.step(np.array([-1.0], np.float32))
+    assert info["dose_mult"] == 0.0 and info["insulin"] == 0.0            # full suspend
+    _, _, _, _, info = env.step(np.array([0.5], np.float32))
+    assert info["dose_mult"] == pytest.approx(1.5 * info["base_mult"])

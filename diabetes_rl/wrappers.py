@@ -30,7 +30,7 @@ from collections import deque
 import gymnasium as gym
 import numpy as np
 
-from diabetes_rl.baselines import BasalPIDController
+from diabetes_rl.baselines import BasalBolusController, BasalPIDController
 from diabetes_rl.envs import make_env, STEPS_PER_DAY
 from diabetes_rl.patients import basal_rate
 from diabetes_rl.safety import ShieldWrapper
@@ -270,12 +270,17 @@ class GlucoseControlWrapper(gym.Wrapper):
     def _build_obs(self) -> np.ndarray:
         return np.clip(self._features(), self.observation_space.low, self.observation_space.high)
 
-    # hooks for subclasses: called with the newest CGM before the observation is built
-    def _on_reset(self, cgm: float):
+    # hooks for subclasses: called with the newest CGM (and the simulator's info)
+    # before the observation is built
+    def _on_reset(self, cgm: float, info: dict):
         pass
 
-    def _on_step(self, cgm: float):
+    def _on_step(self, cgm: float, info: dict):
         pass
+
+    def _dose(self, action) -> float:
+        """Agent action -> pump rate (U/min) asked of the simulator."""
+        return action_to_multiplier(action, self.max_multiplier) * self.basal
 
     # -- gym API -------------------------------------------------------------
     def reset(self, **kwargs):
@@ -291,12 +296,12 @@ class GlucoseControlWrapper(gym.Wrapper):
         for _ in range(self.N_INSULIN_HIST):
             self.mult_hist.append(1.0)
         self._set_clock(info)
-        self._on_reset(cgm0)
+        self._on_reset(cgm0, info)
         info = dict(info, patient_basal=self.basal)
         return self._build_obs(), info
 
     def step(self, action):
-        proposed = action_to_multiplier(action, self.max_multiplier) * self.basal
+        proposed = self._dose(action)
         obs, reward, terminated, truncated, info = self.env.step(np.array([proposed], dtype=np.float32))
         insulin = float(info.get("insulin_delivered", proposed))
 
@@ -304,7 +309,7 @@ class GlucoseControlWrapper(gym.Wrapper):
         self.mult_hist.append(insulin / self.basal)
         self._update_iob(insulin, info.get("sample_time", 3.0))
         self._set_clock(info)
-        self._on_step(float(obs[0]))
+        self._on_step(float(obs[0]), info)
 
         reward = max(float(reward) * self.reward_scale, -1.0)
         if terminated:
@@ -348,12 +353,12 @@ class ResidualPIDWrapper(GlucoseControlWrapper):
         dose = float(self.pid.act(cgm)[0])
         self.a_pid = multiplier_to_action(dose / self.basal, self.max_multiplier)
 
-    def _on_reset(self, cgm: float):
+    def _on_reset(self, cgm: float, info: dict):
         self.pid = BasalPIDController(self.patient_name, max_multiplier=self.max_multiplier,
                                       **self.pid_kwargs)
         self._propose(cgm)
 
-    def _on_step(self, cgm: float):
+    def _on_step(self, cgm: float, info: dict):
         self._propose(cgm)
 
     def _features(self) -> np.ndarray:
@@ -366,7 +371,78 @@ class ResidualPIDWrapper(GlucoseControlWrapper):
         a_pid = self.a_pid
         final = float(np.clip(a_pid + self.residual_scale * a, -1.0, 1.0))
         obs, reward, terminated, truncated, info = super().step(np.array([final], dtype=np.float32))
-        info = dict(info, pid_action=a_pid, final_action=final)
+        info = dict(info, pid_action=a_pid, final_action=final,
+                    base_mult=action_to_multiplier(a_pid, self.max_multiplier),
+                    dose_mult=action_to_multiplier(final, self.max_multiplier))
+        return obs, reward, terminated, truncated, info
+
+
+class ResidualBBWrapper(GlucoseControlWrapper):
+    """Hybrid closed loop: residual RL on top of meal-announced basal-bolus.
+
+        dose = BB dose x max(0, 1 + residual_scale * a_agent),   a_agent in [-1, 1]
+
+    :class:`~diabetes_rl.baselines.BasalBolusController` delivers the prescribed
+    basal plus, when a meal is announced, a carb-ratio bolus (and a correction
+    above 150 mg/dL). The agent *scales* that dose -- with scale 1 anywhere from
+    a full suspend (0x) to double -- so it can trim boluses that would cause a
+    late low, suspend basal while insulin on board is high, or add insulin
+    between meals. Action 0 reproduces basal-bolus exactly. A meal bolus is
+    ~50-150x the basal rate, far outside the v2 action range, hence a
+    multiplicative correction instead of ResidualPIDWrapper's additive one.
+
+    This controller uses MORE information than the CGM-only ones: announced
+    meal carbs (exactly what the basal-bolus reference uses). The observation
+    is the v2 observation with the insulin features on a log scale (boluses
+    would saturate a linear one), plus the basal-bolus proposal (log scale)
+    and carbs on board (announced grams decaying with ``COB_TAU``).
+    """
+
+    COB_TAU = 60.0     # min
+    LOG_DOSE = np.log1p(100.0)
+
+    def __init__(self, env, residual_scale: float = 1.0, **kw):
+        super().__init__(env, **kw)
+        self.residual_scale = float(residual_scale)
+        n = self.observation_space.shape[0] + 2
+        self.observation_space = gym.spaces.Box(low=-5.0, high=5.0, shape=(n,), dtype=np.float32)
+        self.bb = None
+        self.base_dose = 0.0
+        self.cob = 0.0
+        self._last_mult = 1.0
+
+    def _on_reset(self, cgm: float, info: dict):
+        self.bb = BasalBolusController(self.patient_name)
+        self.cob = 0.0
+        self.base_dose = float(self.bb.act(cgm, info)[0])
+
+    def _on_step(self, cgm: float, info: dict):
+        st = float(info.get("sample_time", 3.0))
+        self.cob = self.cob * np.exp(-st / self.COB_TAU) + float(info.get("meal", 0.0)) * st
+        self.base_dose = float(self.bb.act(cgm, info)[0])
+
+    def _features(self) -> np.ndarray:
+        ang = 2 * np.pi * self.minute_of_day / 1440.0
+        mult = np.maximum(np.asarray(self.mult_hist, dtype=np.float32), 0.0)
+        return np.concatenate([
+            np.asarray(self.cgm_hist, dtype=np.float32) / self.CGM_SCALE,
+            [np.clip(self._slope() / 4.0, -2.0, 2.0)],
+            np.log1p(mult) / self.LOG_DOSE,
+            [np.log1p(max(self._iob_rel(), 0.0)) / np.log1p(20.0)],
+            [np.sin(ang), np.cos(ang)],
+            [np.log1p(self.base_dose / self.basal) / self.LOG_DOSE, min(self.cob / 100.0, 3.0)],
+        ]).astype(np.float32)
+
+    def _dose(self, action) -> float:
+        a = float(np.clip(np.asarray(action, dtype=np.float64).ravel()[0], -1.0, 1.0))
+        self._last_mult = max(0.0, 1.0 + self.residual_scale * a)
+        return self.base_dose * self._last_mult
+
+    def step(self, action):
+        base = self.base_dose
+        obs, reward, terminated, truncated, info = super().step(action)
+        info = dict(info, base_mult=base / self.basal, dose_mult=base * self._last_mult / self.basal,
+                    bolus_scale=self._last_mult)
         return obs, reward, terminated, truncated, info
 
 
@@ -374,7 +450,8 @@ def make_glucose_env(env_id, patient_name="adolescent#001", reward_fun=None,
                      env_seed=None, history_len=None, max_basal=DEFAULT_MAX_BASAL,
                      terminal_penalty=None, max_episode_steps=STEPS_PER_DAY,
                      env_version="v1", fresh_episodes=None, fixed_episodes=None,
-                     max_multiplier=5.0, gamma=0.99, shield=False, residual=0.0):
+                     max_multiplier=5.0, gamma=0.99, shield=False, residual=0.0,
+                     residual_base="pid"):
     """Build the full agent environment, identically for training and evaluation.
 
     Stacks: simglucose env -> episode control -> state/action/reward wrapper.
@@ -386,9 +463,10 @@ def make_glucose_env(env_id, patient_name="adolescent#001", reward_fun=None,
       on for a list of patients (as before); pass True for single-patient training.
     * ``fixed_episodes``: list of ``(patient, seed)`` days to cycle through
       deterministically (validation). Overrides ``fresh_episodes``.
-    * ``residual`` > 0 (v2 only): residual RL around the tuned basal PID
-      (ResidualPIDWrapper) with that residual scale; use ``max_multiplier=8``,
-      the cap the PID was tuned with.
+    * ``residual`` > 0 (v2 only): residual RL with that residual scale around
+      ``residual_base``: "pid" = the tuned basal PID (ResidualPIDWrapper; use
+      ``max_multiplier=8``, the cap the PID was tuned with) or "bb" = the
+      meal-announced basal-bolus controller (ResidualBBWrapper).
 
     Using one factory everywhere guarantees train/eval use the exact same setup.
     """
@@ -411,8 +489,11 @@ def make_glucose_env(env_id, patient_name="adolescent#001", reward_fun=None,
         kw = dict(history_len=history_len or 20, max_multiplier=max_multiplier,
                   reward_scale=reward_scale_for(reward_fun), terminal_penalty=terminal_penalty,
                   gamma=gamma)
-        env = (ResidualPIDWrapper(env, residual_scale=residual, **kw) if residual
-               else GlucoseControlWrapper(env, **kw))
+        if residual:
+            cls = {"pid": ResidualPIDWrapper, "bb": ResidualBBWrapper}[residual_base]
+            env = cls(env, residual_scale=residual, **kw)
+        else:
+            env = GlucoseControlWrapper(env, **kw)
     else:
         raise ValueError(f"unknown env_version {env_version!r} (use 'v1' or 'v2')")
     return env

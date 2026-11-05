@@ -71,6 +71,8 @@ def main():
     p.add_argument("--shield-train", action="store_true", help="v2: train with the safety shield in the loop")
     p.add_argument("--residual", type=float, default=0.0,
                    help="v2: residual RL on top of the tuned basal PID with this scale (0 = off)")
+    p.add_argument("--residual-base", default="pid", choices=["pid", "bb"],
+                   help="v2 residual RL: correct the tuned PID or meal-announced basal-bolus")
     p.add_argument("--max-multiplier", type=float, default=None,
                    help="v2: dose cap as a multiple of basal (default 5; 8 with --residual)")
     p.add_argument("--shield-eval", action="store_true", help="evaluate every controller behind the safety shield")
@@ -107,7 +109,7 @@ def main():
             if args.shield_train:
                 cmd += ["--shield"]
             if args.residual:
-                cmd += ["--residual", args.residual]
+                cmd += ["--residual", args.residual, "--residual-base", args.residual_base]
             if args.max_multiplier is not None:
                 cmd += ["--max-multiplier", args.max_multiplier]
             run(cmd)

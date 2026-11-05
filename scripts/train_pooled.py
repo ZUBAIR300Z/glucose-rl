@@ -136,6 +136,9 @@ def main():
     p.add_argument("--residual", type=float, default=0.0,
                    help="v2: residual RL around the tuned basal PID with this residual scale "
                         "(final action = PID action + scale * agent action; 0 = off)")
+    p.add_argument("--residual-base", default="pid", choices=["pid", "bb"],
+                   help="controller the residual agent corrects: the tuned basal PID (CGM only) or "
+                        "meal-announced basal-bolus (dose = BB dose * (1 + scale * a); uses meal info)")
     p.add_argument("--shield", action="store_true", help="v2: train with the PLGS safety shield in the loop")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--tag", default="default",
@@ -172,7 +175,7 @@ def main():
     cfg = dict(algo=args.algo, env_version=args.env_version, reward=args.reward,
                history=args.history, terminal_penalty=args.terminal_penalty,
                max_multiplier=args.max_multiplier, gamma=args.gamma, shield=args.shield,
-               residual=args.residual, learning_rate=args.learning_rate, timesteps=args.timesteps, tag=args.tag,
+               residual=args.residual, residual_base=args.residual_base, learning_rate=args.learning_rate, timesteps=args.timesteps, tag=args.tag,
                train_patients=train_patients, val_patients=val_patients, test_patients=test_patients)
     with open(os.path.join(out_dir, "config.json"), "w") as f:
         json.dump(cfg, f, indent=2)
@@ -205,7 +208,7 @@ def main():
         model = make_model(args.algo, env, seed=args.seed, learning_rate=args.learning_rate,
                            gamma=args.gamma, tensorboard_log=LOGS_DIR)
         if args.residual:
-            zero_init_policy_head(model)  # untrained agent == the tuned PID
+            zero_init_policy_head(model)  # untrained agent == its base controller
 
     best_dir = os.path.join(out_dir, f"best_seed{args.seed}")
     ckpt_dir = os.path.join(out_dir, "checkpoints")
@@ -223,7 +226,8 @@ def main():
     callbacks.append(eval_cb)
 
     print(f"\n{args.algo.upper()} [tag={args.tag}, env={args.env_version}"
-          f"{f', residual on tuned PID x{args.residual:g}' if args.residual else ''}]: {args.timesteps:,} steps, "
+          f"{f', residual on {args.residual_base} x{args.residual:g}' if args.residual else ''}]: "
+          f"{args.timesteps:,} steps, "
           f"seed {args.seed}, reward={args.reward}, shield={args.shield}. "
           f"Best checkpoint chosen on {len(val_episodes)} fixed validation days.\n")
     t0 = time.time()

@@ -135,7 +135,8 @@ def main():
             c = find_run_config(path)
             if args.algo:
                 c["algo"] = args.algo
-            key = lambda k: (k["env_version"], k["history"], k["max_multiplier"], k.get("residual", 0.0))
+            key = lambda k: (k["env_version"], k["history"], k["max_multiplier"], k.get("residual", 0.0),
+                             k.get("residual_base", "pid"))
             if cfg is not None and key(c) != key(cfg):
                 sys.exit("all --model paths must share the same env config to be ensembled")
             cfg = c
