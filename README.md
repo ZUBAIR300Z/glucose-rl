@@ -301,9 +301,9 @@ lower is better).
 6. **Residual RL closes the gap.** Letting SAC learn bounded corrections on
    top of the tuned PID (instead of the whole controller) is the first RL
    configuration that reaches the classical bar: 76.0% TIR vs 76.1%, with
-   1.1% vs 2.1% hypoglycemia and the lowest GRI of any CGM-only controller
-   (28 vs 30; the TBR and GRI gaps are within noise over 30 days, and over
-   the 120-day extended test below it is equivalent to the PID). Against
+   1.1% vs 2.1% hypoglycemia and a lower GRI (28 vs 30; the TBR and GRI
+   gaps are within noise over 30 days, and over the 120-day extended test
+   below it is equivalent to the PID). Against
    plain SAC on the same environment it gains **+4.9 TIR points at the same
    hypoglycemia** (p < 0.001, better on 28 of 30 days; GRI −4.4,
    p < 0.001), and its 5 seeds agree closely (± 1.2 TIR). See
@@ -326,7 +326,6 @@ lower is better).
    hypoglycemia target (3.4% vs the PID's 5.0%) while matching the PID's
    overall TIR (plain v2-SAC also keeps children under 4%, but at 5 TIR
    points less).
-
 8. **Optimizing the clinical metric itself resolves the trade-off.** The
    Glycemia Risk Index is linear in the time spent in each glucose band
    (3.0 × very low + 2.4 × low + 1.6 × very high + 0.8 × high), so a
@@ -338,12 +337,13 @@ lower is better).
    TIR / 4.1% TBR vs the PID's 74% / 5.0%). Over 120 days its ensemble beats
    the PID on every metric (below).
 
-**What would most likely help next:** meal announcement (the basal-bolus
-reference shows the value of meal information; residual RL on top of a
-meal-aware controller is the natural next step), and constrained RL with an
-explicit TBR < 4% constraint per patient group instead of reward shaping:
-finding 7 shows a single averaged objective lets an agent trade one group's
-safety for another group's time in range.
+**What would most likely help next:** the remaining failures are
+hyperglycemic crashes in one child (child#008), which every controller here
+shares; an explicit high-glucose constraint or meal announcement is the
+obvious lever. Beyond that: constrained RL with a TBR < 4% limit per patient
+group (finding 7 shows an averaged objective can trade one group's safety
+for another's time in range), more seeds or early stopping for the more
+variable hybrid, and validation beyond this one simulator.
 
 **Extended test: 120 held-out days.** 30 days cannot resolve differences of
 a point or two, so the key controllers were re-tested on 20 days per test
@@ -376,13 +376,15 @@ GRI-reward ensemble does: +2.6 points of time in range, 0.9 points less
 hypoglycemia, fewer severe lows and a 3.8-point lower GRI, all
 significant over 120 days**. Its individual seeds beat the PID on time in
 range and GRI and match it on hypoglycemia; the median-dose ensemble cuts
-the lows further (TBR 2.3% → 1.8%). Every crash of both controllers is hyperglycemia
-(> 600 mg/dL) in child#008: the PID crashes 8 of its 120 days, the ensemble
-the same 8 plus one. With announced
-meals, the hybrid residual agent keeps basal-bolus's time in range while
-**halving its hypoglycemia and severe lows**: the only meal-announced
-controller here that meets the < 4% target (survival 95% vs 98%: see the
-child#008 caveat in the [hybrid section](#hybrid-closed-loop-residual-rl-on-meal-announced-basal-bolus)).
+the lows further (TBR 2.3% → 1.8%). Every crash of both controllers is
+hyperglycemia (> 600 mg/dL) in child#008: the PID crashes 8 of its 120 days,
+the ensemble the same 8 plus one.
+
+With announced meals, the hybrid residual agents (zone or GRI reward) keep
+basal-bolus's time in range while **halving its hypoglycemia and severe
+lows**, the only meal-announced controllers here that meet the < 4% target
+(survival 95–96% vs 98%: see the child#008 caveat in the
+[hybrid section](#hybrid-closed-loop-residual-rl-on-meal-announced-basal-bolus)).
 
 Full tables, including per-cohort results and the evaluation with every
 controller behind the safety shield, are in
