@@ -77,9 +77,36 @@ def zone_reward(BG_last_hour) -> float:
     return -(bg - TARGET_HIGH) / 100.0
 
 
+SEVERE_HYPER = 250
+
+
+def gri_reward(BG_last_hour) -> float:
+    """Per-step Glycemia Risk Index penalty (Klonoff et al., 2023).
+
+    GRI = 3.0 x %VeryLow (<54) + 2.4 x %Low (54-69) + 1.6 x %VeryHigh (>250)
+          + 0.8 x %High (181-250)
+    is *linear* in the time spent in each band, so this per-step penalty summed
+    over a day is exactly -GRI x (steps / 100) (below GRI's cap of 100).
+    Maximizing the return minimizes the clinical composite directly, with the
+    consensus weighting of lows against highs instead of a hand-tuned one.
+    Same bands as ``metrics.glycemic_metrics``.
+    """
+    bg = float(BG_last_hour[-1])
+    if bg < SEVERE_HYPO:
+        return -3.0
+    if bg < TARGET_LOW:
+        return -2.4
+    if bg > SEVERE_HYPER:
+        return -1.6
+    if bg > TARGET_HIGH:
+        return -0.8
+    return 0.0
+
+
 # Convenient lookup so scripts can select a reward by name.
 REWARD_FUNCTIONS = {
     "magni": magni_reward,
     "magni_hypo": magni_hypo_reward,
     "zone": zone_reward,
+    "gri": gri_reward,
 }

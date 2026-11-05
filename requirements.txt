@@ -9,8 +9,16 @@ matplotlib
 # RL environment + algorithms
 gymnasium>=0.29,<1.1
 simglucose==0.2.11
+# simglucose imports pkg_resources, which setuptools removed in v81 -- without
+# this pin a fresh install fails with "No module named 'pkg_resources'".
+setuptools<81
 stable-baselines3>=2.3,<3.0
+# TQC, CrossQ, RecurrentPPO (scripts/train_pooled.py --algo ...)
+sb3-contrib>=2.3,<3.0
 
 # Deep learning backend (CPU build is fine to start; see README for GPU notes)
 torch
 tensorboard
+
+# Tests (python -m pytest -q)
+pytest

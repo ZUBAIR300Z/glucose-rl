@@ -29,7 +29,7 @@ from diabetes_rl.envs import make_env, STEPS_PER_DAY
 from diabetes_rl.metrics import glycemic_metrics, format_metrics
 from diabetes_rl.rewards import REWARD_FUNCTIONS
 from diabetes_rl.sac_scratch import SAC, ReplayBuffer
-from diabetes_rl.wrappers import GlucoseTrendWrapper
+from diabetes_rl.wrappers import FreshEpisodeWrapper, GlucoseTrendWrapper
 
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODELS_DIR = os.path.join(PROJECT_ROOT, "models")
@@ -69,9 +69,12 @@ def main():
     np.random.seed(args.seed)
 
     reward_fun = REWARD_FUNCTIONS[args.reward]
+    # FreshEpisodeWrapper: a new meal day every episode (simglucose's reset()
+    # alone would replay the same day for the whole run).
     train_env = GlucoseTrendWrapper(
-        make_env(env_id="simglucose/scratch-train-v0", patient_name=args.patient,
-                 reward_fun=reward_fun, env_seed=args.seed),
+        FreshEpisodeWrapper(
+            make_env(env_id="simglucose/scratch-train-v0", patient_name=args.patient,
+                     reward_fun=reward_fun, env_seed=args.seed)),
         history_len=args.history)
     eval_env = GlucoseTrendWrapper(
         make_env(env_id="simglucose/scratch-eval-v0", patient_name=args.patient,
