@@ -316,3 +316,12 @@ def test_residual_bb_scales_the_dose():
     assert info["dose_mult"] == 0.0 and info["insulin"] == 0.0            # full suspend
     _, _, _, _, info = env.step(np.array([0.5], np.float32))
     assert info["dose_mult"] == pytest.approx(1.5 * info["base_mult"])
+
+
+def test_gri_reward_sums_to_minus_gri():
+    """The per-step GRI reward over a trace equals -GRI x n/100 (same bands as the metric)."""
+    rng = np.random.default_rng(0)
+    bg = rng.uniform(40, 320, size=480)
+    r = sum(REWARD_FUNCTIONS["gri"]([b]) for b in bg)
+    assert r == pytest.approx(-glycemic_metrics(bg)["gri"] * len(bg) / 100.0)
+    assert REWARD_FUNCTIONS["gri"]([120.0]) == 0.0
