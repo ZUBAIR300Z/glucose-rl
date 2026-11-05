@@ -29,11 +29,11 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 |   ↳ ensemble of 5 seeds (median dose) | - | 78.4 | 1.1 | 0.2 | 26 | 90% | - | TIR +23.9 (p=0.000)*; TBR -10.1 (p=0.000)* | TIR +2.4 (p=0.008)*; TBR -1.0 (p=0.128) |
 | Residual PPO on tuned PID (scale 0.5) | 3 | 72.4 ± 1.1 | 1.1 ± 0.2 | 0.2 | 32 | 84% | 3/3 | TIR +17.9 (p=0.000)*; TBR -10.1 (p=0.000)* | TIR -3.7 (p=0.002)*; TBR -1.0 (p=0.028)* |
 |   ↳ ensemble of 3 seeds (median dose) | - | 72.2 | 1.2 | 0.2 | 32 | 83% | - | TIR +17.7 (p=0.000)*; TBR -10.0 (p=0.000)* | TIR -3.9 (p=0.001)*; TBR -0.8 (p=0.028)* |
-| Residual SAC on basal-bolus, meals announced* | 4 | 72.0 ± 5.8 | 1.2 ± 0.9 | 0.3 | 32 | 94% | 4/4 | TIR +17.4 (p=0.000)*; TBR -10.0 (p=0.000)* | TIR -4.1 (p=0.032)*; TBR -0.8 (p=0.422) |
+| Residual SAC on basal-bolus, Magni reward* | 4 | 72.0 ± 5.8 | 1.2 ± 0.9 | 0.3 | 32 | 94% | 4/4 | TIR +17.4 (p=0.000)*; TBR -10.0 (p=0.000)* | TIR -4.1 (p=0.032)*; TBR -0.8 (p=0.422) |
 |   ↳ ensemble of 4 seeds (median dose) | - | 69.9 | 0.5 | 0.1 | 33 | 93% | - | TIR +15.4 (p=0.000)*; TBR -10.7 (p=0.000)* | TIR -6.1 (p=0.008)*; TBR -1.5 (p=0.176) |
-| Residual SAC on basal-bolus, zone reward, meals announced* | 5 | 78.3 ± 3.3 | 3.0 ± 1.7 | 1.0 | 29 | 95% | 2/5 | TIR +23.8 (p=0.000)*; TBR -8.2 (p=0.002)* | TIR +2.3 (p=0.318); TBR +1.0 (p=0.492) |
+| Residual SAC on basal-bolus, zone reward* | 5 | 78.3 ± 3.3 | 3.0 ± 1.7 | 1.0 | 29 | 95% | 2/5 | TIR +23.8 (p=0.000)*; TBR -8.2 (p=0.002)* | TIR +2.3 (p=0.318); TBR +1.0 (p=0.492) |
 |   ↳ ensemble of 5 seeds (median dose) | - | 79.5 | 3.6 | 0.9 | 29 | 97% | - | TIR +25.0 (p=0.000)*; TBR -7.7 (p=0.004)* | TIR +3.5 (p=0.177); TBR +1.5 (p=0.382) |
-| Residual SAC on basal-bolus, GRI reward, meals announced* | 3 | 78.0 ± 1.0 | 3.5 ± 1.3 | 1.0 | 30 | 94% | 1/3 | TIR +23.5 (p=0.000)*; TBR -7.8 (p=0.002)* | TIR +1.9 (p=0.465); TBR +1.4 (p=0.246) |
+| Residual SAC on basal-bolus, GRI reward* | 3 | 78.0 ± 1.0 | 3.5 ± 1.3 | 1.0 | 30 | 94% | 1/3 | TIR +23.5 (p=0.000)*; TBR -7.8 (p=0.002)* | TIR +1.9 (p=0.465); TBR +1.4 (p=0.246) |
 |   ↳ ensemble of 3 seeds (median dose) | - | 78.8 | 3.1 | 1.2 | 28 | 93% | - | TIR +24.3 (p=0.000)*; TBR -8.2 (p=0.004)* | TIR +2.7 (p=0.328); TBR +1.0 (p=0.753) |
 
 **By patient cohort** (no shield)
@@ -65,12 +65,12 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 | Residual SAC on tuned PID, GRI reward: ensemble | 76% / 3.3% | 76% / 0.0% | 83% / 0.0% |
 | Residual PPO on tuned PID (scale 0.5) | 75% / 2.9% | 72% / 0.4% | 70% / 0.0% |
 | Residual PPO on tuned PID (scale 0.5): ensemble | 75% / 3.2% | 71% / 0.4% | 70% / 0.0% |
-| Residual SAC on basal-bolus, meals announced | 73% / 1.5% | 65% / 2.0% | 77% / 0.3% |
-| Residual SAC on basal-bolus, meals announced: ensemble | 75% / 0.0% | 61% / 1.6% | 74% / 0.0% |
-| Residual SAC on basal-bolus, zone reward, meals announced | 73% / 4.6% | 75% / 3.0% | 87% / 1.6% |
-| Residual SAC on basal-bolus, zone reward, meals announced: ensemble | 74% / 4.2% | 78% / 3.2% | 87% / 3.3% |
-| Residual SAC on basal-bolus, GRI reward, meals announced | 73% / 4.9% | 75% / 3.4% | 86% / 2.1% |
-| Residual SAC on basal-bolus, GRI reward, meals announced: ensemble | 75% / 3.5% | 76% / 3.3% | 86% / 2.4% |
+| Residual SAC on basal-bolus, Magni reward | 73% / 1.5% | 65% / 2.0% | 77% / 0.3% |
+| Residual SAC on basal-bolus, Magni reward: ensemble | 75% / 0.0% | 61% / 1.6% | 74% / 0.0% |
+| Residual SAC on basal-bolus, zone reward | 73% / 4.6% | 75% / 3.0% | 87% / 1.6% |
+| Residual SAC on basal-bolus, zone reward: ensemble | 74% / 4.2% | 78% / 3.2% | 87% / 3.3% |
+| Residual SAC on basal-bolus, GRI reward | 73% / 4.9% | 75% / 3.4% | 86% / 2.1% |
+| Residual SAC on basal-bolus, GRI reward: ensemble | 75% / 3.5% | 76% / 3.3% | 86% / 2.4% |
 
 **Held-out test patients (6 patients x 5 days), every controller behind the safety shield**
 
@@ -103,11 +103,11 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 |   ↳ ensemble of 5 seeds (median dose) | - | 78.6 | 1.2 | 0.2 | 26 | 87% | - | TIR +23.5 (p=0.000)*; TBR -9.8 (p=0.000)* | TIR +2.5 (p=0.004)*; TBR -0.8 (p=0.236) |
 | Residual PPO on tuned PID (scale 0.5) | 3 | 72.4 ± 1.1 | 1.1 ± 0.2 | 0.2 | 32 | 83% | 3/3 | TIR +17.3 (p=0.000)*; TBR -9.9 (p=0.000)* | TIR -3.7 (p=0.002)*; TBR -0.8 (p=0.043)* |
 |   ↳ ensemble of 3 seeds (median dose) | - | 72.2 | 1.2 | 0.2 | 32 | 83% | - | TIR +17.1 (p=0.000)*; TBR -9.8 (p=0.000)* | TIR -3.9 (p=0.001)*; TBR -0.8 (p=0.028)* |
-| Residual SAC on basal-bolus, meals announced* | 4 | 71.2 ± 6.0 | 1.0 ± 0.7 | 0.3 | 33 | 92% | 4/4 | TIR +16.2 (p=0.000)*; TBR -10.0 (p=0.000)* | TIR -4.9 (p=0.026)*; TBR -1.0 (p=0.382) |
+| Residual SAC on basal-bolus, Magni reward* | 4 | 71.2 ± 6.0 | 1.0 ± 0.7 | 0.3 | 33 | 92% | 4/4 | TIR +16.2 (p=0.000)*; TBR -10.0 (p=0.000)* | TIR -4.9 (p=0.026)*; TBR -1.0 (p=0.382) |
 |   ↳ ensemble of 4 seeds (median dose) | - | 68.7 | 0.4 | 0.0 | 34 | 93% | - | TIR +13.7 (p=0.000)*; TBR -10.6 (p=0.000)* | TIR -7.4 (p=0.003)*; TBR -1.5 (p=0.176) |
-| Residual SAC on basal-bolus, zone reward, meals announced* | 5 | 76.2 ± 3.1 | 2.4 ± 1.3 | 0.9 | 31 | 93% | 5/5 | TIR +21.2 (p=0.000)*; TBR -8.6 (p=0.003)* | TIR +0.1 (p=0.808); TBR +0.4 (p=0.831) |
+| Residual SAC on basal-bolus, zone reward* | 5 | 76.2 ± 3.1 | 2.4 ± 1.3 | 0.9 | 31 | 93% | 5/5 | TIR +21.2 (p=0.000)*; TBR -8.6 (p=0.003)* | TIR +0.1 (p=0.808); TBR +0.4 (p=0.831) |
 |   ↳ ensemble of 5 seeds (median dose) | - | 79.0 | 2.2 | 0.8 | 27 | 93% | - | TIR +24.0 (p=0.000)*; TBR -8.8 (p=0.002)* | TIR +2.9 (p=0.213); TBR +0.2 (p=0.925) |
-| Residual SAC on basal-bolus, GRI reward, meals announced* | 3 | 76.5 ± 1.7 | 2.5 ± 0.9 | 1.0 | 31 | 92% | 3/3 | TIR +21.5 (p=0.000)*; TBR -8.5 (p=0.002)* | TIR +0.4 (p=0.781); TBR +0.5 (p=0.831) |
+| Residual SAC on basal-bolus, GRI reward* | 3 | 76.5 ± 1.7 | 2.5 ± 0.9 | 1.0 | 31 | 92% | 3/3 | TIR +21.5 (p=0.000)*; TBR -8.5 (p=0.002)* | TIR +0.4 (p=0.781); TBR +0.5 (p=0.831) |
 |   ↳ ensemble of 3 seeds (median dose) | - | 78.6 | 1.9 | 0.8 | 28 | 90% | - | TIR +23.6 (p=0.000)*; TBR -9.2 (p=0.001)* | TIR +2.5 (p=0.371); TBR -0.1 (p=0.583) |
 
 **By patient cohort** (shielded)
@@ -139,9 +139,9 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 | Residual SAC on tuned PID, GRI reward: ensemble | 76% / 3.5% | 76% / 0.0% | 83% / 0.0% |
 | Residual PPO on tuned PID (scale 0.5) | 75% / 3.1% | 72% / 0.3% | 70% / 0.0% |
 | Residual PPO on tuned PID (scale 0.5): ensemble | 75% / 3.2% | 71% / 0.4% | 70% / 0.0% |
-| Residual SAC on basal-bolus, meals announced | 73% / 1.1% | 65% / 1.8% | 76% / 0.1% |
-| Residual SAC on basal-bolus, meals announced: ensemble | 73% / 0.0% | 61% / 1.3% | 72% / 0.0% |
-| Residual SAC on basal-bolus, zone reward, meals announced | 72% / 3.1% | 72% / 2.9% | 84% / 1.2% |
-| Residual SAC on basal-bolus, zone reward, meals announced: ensemble | 78% / 1.4% | 75% / 3.0% | 84% / 2.2% |
-| Residual SAC on basal-bolus, GRI reward, meals announced | 73% / 3.0% | 72% / 3.3% | 85% / 1.3% |
-| Residual SAC on basal-bolus, GRI reward, meals announced: ensemble | 77% / 1.9% | 72% / 3.1% | 86% / 0.5% |
+| Residual SAC on basal-bolus, Magni reward | 73% / 1.1% | 65% / 1.8% | 76% / 0.1% |
+| Residual SAC on basal-bolus, Magni reward: ensemble | 73% / 0.0% | 61% / 1.3% | 72% / 0.0% |
+| Residual SAC on basal-bolus, zone reward | 72% / 3.1% | 72% / 2.9% | 84% / 1.2% |
+| Residual SAC on basal-bolus, zone reward: ensemble | 78% / 1.4% | 75% / 3.0% | 84% / 2.2% |
+| Residual SAC on basal-bolus, GRI reward | 73% / 3.0% | 72% / 3.3% | 85% / 1.3% |
+| Residual SAC on basal-bolus, GRI reward: ensemble | 77% / 1.9% | 72% / 3.1% | 86% / 0.5% |

@@ -53,10 +53,10 @@ TAG_LABELS = {
     "v2-res1-sac": "Residual SAC on tuned PID (scale 1.0)",
     "v2-res-sac-zone": "Residual SAC on tuned PID, zone reward",
     "v2-res-sac-gri": "Residual SAC on tuned PID, GRI reward",
-    "v2-res-bb": "Residual SAC on basal-bolus, meals announced*",
+    "v2-res-bb": "Residual SAC on basal-bolus, Magni reward*",
     "v2-res-ppo": "Residual PPO on tuned PID (scale 0.5)",
-    "v2-res-bb-zone": "Residual SAC on basal-bolus, zone reward, meals announced*",
-    "v2-res-bb-gri": "Residual SAC on basal-bolus, GRI reward, meals announced*",
+    "v2-res-bb-zone": "Residual SAC on basal-bolus, zone reward*",
+    "v2-res-bb-gri": "Residual SAC on basal-bolus, GRI reward*",
 }
 BASELINES = {"pid": "PID (repo)", "bpid": "PID scaled to basal, tuned",
              "basal": "Prescribed basal only", "bb": "Basal-bolus, meals announced*"}
