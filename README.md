@@ -39,6 +39,15 @@ UVA/Padova Type-1 Diabetes simulator.**
 
 ## Key Results
 
+> **Latest: residual RL reaches the classical bar.** An RL agent that learns
+> bounded corrections on top of the tuned, patient-scaled PID (residual SAC)
+> matches that PID on the 6 held-out patients: **76.0% vs 76.1% time in range,
+> with 1.1% vs 2.1% time below range** (5 training seeds, all meeting the
+> < 4% target). Plain SAC on the same environment stays 4.9 TIR points lower
+> at the same hypoglycemia. See [v2](#v2-review-fixes-and-a-redesigned-agent)
+> and [Residual RL](#residual-rl-on-top-of-the-tuned-pid). The sections below
+> keep the original study as it was reported.
+
 ### Headline: multi-patient generalization study
 
 The trustworthy result. Trained on **24 patients**, evaluated on **6
@@ -220,9 +229,10 @@ alone would not fix. Methodology fixes are on by default; everything that
 would change the original setup is **opt-in** (`--env-version v2`, `--algo`,
 `--shield`), so the v1 results stay reproducible.
 
-> **Status:** 21 training runs completed (stopped early by choice: seed 4 of
-> v2-SAC and of the 8x-cap variant, and RecurrentPPO seed 2, were not run).
-> All models were trained and scored with the code in this repository.
+> **Status:** 31 training runs completed: the 21 runs of the first v2 study,
+> seed 4 of v2-SAC and of the 8x-cap variant, and 8 residual-RL runs
+> (RecurrentPPO seed 2 and CrossQ were not run). All models were trained and
+> scored with the code in this repository.
 
 ### Results: held-out test patients (6 patients × 5 days)
 
@@ -233,24 +243,30 @@ seeds of a configuration.
 
 ![v2 study comparison](docs/study_comparison.png)
 
-| Controller | Seeds | Time in Range ↑ | TBR <70 ↓ | TBR <54 ↓ | Survived | vs tuned basal PID (TIR, paired) |
-|----|----|----|----|----|----|----|
-| PID (repo) | – | 54.5% | 11.2% | 8.0% | 73% | –21.6 |
-| **PID scaled to basal, tuned** | – | **76.1%** | 2.1% | 0.3% | 90% | – |
-| Basal-bolus, meals announced (reference) | – | 79.7% | 5.7% | 1.7% | 97% | +3.6 |
-| SAC, v1 env (original setup) | 5 | 53.8% ± 1.3 | 25.6% ± 7.2 | 19.4% | 38% | –22.3 (p < 0.001) |
-| **SAC, v2 env** | 4 | **71.6% ± 2.0** | **1.0% ± 0.6** | **0.0%** | 88% | –4.5 (p = 0.002) |
-| ↳ ensemble of the 4 seeds | – | 72.1% | 0.9% | 0.0% | 90% | –4.0 (p = 0.006) |
-| SAC, v2 env, dose cap 8× basal | 4 | 72.2% ± 1.6 | 1.0% ± 0.6 | 0.3% | 89% | –3.8 (p = 0.012) |
-| TQC, v2 env | 3 | 67.9% ± 1.0 | 0.5% ± 0.6 | 0.0% | 84% | –8.2 (p < 0.001) |
-| PPO, v2 env | 3 | 67.2% ± 2.4 | 0.5% ± 0.3 | 0.0% | 83% | –8.9 (p < 0.001) |
-| RecurrentPPO, v2 env | 2 | 65.9% ± 8.5 | 2.5% ± 2.1 | 0.6% | 87% | –10.2 (p < 0.001) |
+| Controller | Seeds | Time in Range ↑ | TBR <70 ↓ | TBR <54 ↓ | GRI ↓ | Survived | vs tuned basal PID (TIR, paired) |
+|----|----|----|----|----|----|----|----|
+| PID (repo) | – | 54.5% | 11.2% | 8.0% | 68 | 73% | –21.6 |
+| **PID scaled to basal, tuned** | – | **76.1%** | 2.1% | 0.3% | 30 | 90% | – |
+| Basal-bolus, meals announced (reference) | – | 79.7% | 5.7% | 1.7% | 32 | 97% | +3.6 |
+| SAC, v1 env (original setup) | 5 | 53.8% ± 1.3 | 25.6% ± 7.2 | 19.4% | 79 | 38% | –22.3 (p < 0.001) |
+| SAC, v2 env | 5 | 71.1% ± 2.0 | 0.9% ± 0.6 | 0.0% | 32 | 87% | –4.9 (p = 0.002) |
+| ↳ ensemble of the 5 seeds | – | 71.7% | 1.0% | 0.0% | 32 | 90% | –4.4 (p = 0.004) |
+| SAC, v2 env, dose cap 8× basal | 5 | 72.3% ± 1.4 | 1.0% ± 0.6 | 0.2% | 31 | 89% | –3.7 (p = 0.007) |
+| TQC, v2 env | 3 | 67.9% ± 1.0 | 0.5% ± 0.6 | 0.0% | 35 | 84% | –8.2 (p < 0.001) |
+| PPO, v2 env | 3 | 67.2% ± 2.4 | 0.5% ± 0.3 | 0.0% | 36 | 83% | –8.9 (p < 0.001) |
+| RecurrentPPO, v2 env | 2 | 65.9% ± 8.5 | 2.5% ± 2.1 | 0.6% | 42 | 87% | –10.2 (p < 0.001) |
+| **Residual SAC on the tuned PID** (`--residual 0.5`) | 5 | **76.0% ± 1.2** | **1.1% ± 0.3** | 0.4% | **28** | 91% | –0.1 (p = 0.48) |
+| ↳ ensemble of the 5 seeds | – | 76.1% | 1.0% | 0.3% | 28 | 90% | +0.0 (p = 0.35) |
+| Residual SAC, scale 1.0 (ablation) | 3 | 74.7% ± 1.2 | 0.8% ± 0.1 | 0.3% | 29 | 90% | –1.4 (p = 0.041) |
+
+GRI = Glycemia Risk Index (0–100, a composite of time low and time high;
+lower is better).
 
 1. **The environment redesign fixes the overdosing.** Same algorithm (SAC),
-   hyperparameters and budget: hypoglycemia drops from **25.6% to 1.0%** of
-   the day and time in range rises **53.8% → 71.6%**. All 4 v2 seeds meet
+   hyperparameters and budget: hypoglycemia drops from **25.6% to 0.9%** of
+   the day and time in range rises **53.8% → 71.1%**. All 5 v2 seeds meet
    the < 4% hypoglycemia target; none of the 5 v1 seeds does. Against the
-   original PID, v2-SAC gains +17.0 TIR points with 10.2 points less
+   original PID, v2-SAC gains +16.6 TIR points with 10.3 points less
    hypoglycemia (paired Wilcoxon over the 30 days, both p < 0.001).
 2. **With leakage-free checkpoint selection, no v1 seed reproduces the
    original "good" seed 0** (62.6% TIR / 5.8% TBR); all five overdose (TBR
@@ -261,21 +277,32 @@ seeds of a configuration.
    on v2 all land at 67–72% TIR with ≤ 1% hypoglycemia; TQC and PPO are more
    conservative (more time high). RecurrentPPO's two seeds disagree by 17 TIR
    points (57% vs 74%), the least reliable at this training budget.
-4. **RL does not beat a well-tuned classical controller here.** The best
-   agents are 4–5 TIR points below the basal-scaled PID tuned on training
-   patients, at similar or lower hypoglycemia. Raising the dose cap from 5×
-   to 8× basal (the PID's cap) adds only +0.6 points: the cap was not the
-   main gap.
+4. **RL learned from scratch does not beat a well-tuned classical
+   controller here.** The best plain agents are 4–5 TIR points below the
+   basal-scaled PID tuned on training patients, at similar or lower
+   hypoglycemia. Raising the dose cap from 5× to 8× basal (the PID's cap)
+   adds only +1.2 points: the cap was not the main gap.
 5. **Seed ensembles help a little; a safety shield helps only unsafe
    controllers.** Median-dose ensembles match or slightly beat the average
    seed. The shield cuts v1-SAC's severe hypoglycemia from 22.0% to 11.7% and
    doubles its survival (33% → 68%), but leaves 21% TBR; on v2 agents it
    changes almost nothing.
+6. **Residual RL closes the gap.** Letting SAC learn bounded corrections on
+   top of the tuned PID (instead of the whole controller) is the first RL
+   configuration that reaches the classical bar: 76.0% TIR vs 76.1%, with
+   1.1% vs 2.1% hypoglycemia and the lowest GRI of any CGM-only controller
+   (28 vs 30; the TBR and GRI gaps are within noise over 30 days). Against
+   plain SAC on the same environment it gains **+4.9 TIR points at the same
+   hypoglycemia** (p < 0.001, better on 28 of 30 days; GRI −4.4,
+   p < 0.001), and its 5 seeds agree closely (± 1.2 TIR). See
+   [Residual RL](#residual-rl-on-top-of-the-tuned-pid).
 
 **What would most likely help next:** meal announcement (the basal-bolus
-reference shows the value of meal information), constrained RL with an
-explicit TBR < 4% constraint instead of reward shaping, longer training or
-more seeds for RecurrentPPO, and residual RL on top of the tuned PID.
+reference shows the value of meal information; residual RL on top of a
+meal-aware controller is the natural next step), constrained RL with an
+explicit TBR < 4% constraint instead of reward shaping, and a reward that
+values time in range directly (the Magni risk used here costs as much at
+70 mg/dL as at ~280 mg/dL, so agents trade time in range for fewer lows).
 
 Full tables, including per-cohort results and the evaluation with every
 controller behind the safety shield, are in
@@ -283,6 +310,64 @@ controller behind the safety shield, are in
 results of every run are in [`docs/study_results/`](docs/study_results/);
 `python scripts/compare_studies.py --study-dir docs/study_results`
 regenerates the tables and figures from them.
+
+### Residual RL on top of the tuned PID
+
+Plain agents learn the whole controller from scratch and landed 4–5 TIR
+points below the tuned PID. Residual RL **keeps the PID and learns a bounded
+correction to it** (`--residual SCALE`, `ResidualPIDWrapper`):
+
+```
+final action = clip(a_PID + scale × a_agent, −1, 1)      (v2 basal-relative action space)
+```
+
+* `a_PID` is the tuned `BasalPIDController`'s dose written in the v2 action
+  space. An agent action of 0 reproduces the PID exactly (a unit test checks
+  the blood-glucose trace is identical), and `train_pooled.py`
+  **zero-initializes the policy's output layer**, so the *untrained* agent is
+  the tuned PID: learning starts from the strongest classical controller
+  instead of from random dosing, and every validation checkpoint is a
+  refinement of it.
+* `scale` bounds the agent's authority (0.5: from basal it can go from 0.5×
+  to 4.5×). This also keeps exploration close to a safe controller. Scale
+  1.0 was slightly more conservative and 1.3 TIR points worse (p = 0.002).
+* The observation is the v2 observation plus the PID's proposal and its
+  integral term, so the agent sees what it is correcting. Information used:
+  CGM and the prescribed basal rate only, exactly like the PID and the plain
+  v2 agent.
+
+Same budget as every other run (500k steps, 6 workers, checkpoint chosen on
+the validation patients). Validation scores were also far steadier than plain
+SAC's (best checkpoints at 100–225k steps, little drift afterwards).
+
+![What the residual agent learned](docs/residual_analysis.png)
+
+**What it learned** (5-seed median ensemble on the 30 held-out test days,
+`scripts/analyze_residual.py`): it gives about the same total insulin as the
+PID (0.97×) but redistributes it.
+
+* **Less insulin overnight** (21:00–05:00, down to −0.8× basal): 76% of the
+  PID's time below 70 mg/dL falls between 21:00 and 06:00, where its late
+  corrections stack with dinner insulin. In the example day the PID drives
+  adolescent#010 to 56 mg/dL at about 04:00; the agent's version of that day
+  has no low (TIR 73% → 87%, TBR 12.1% → 0%).
+* **More insulin before and around lunch and dinner** (10–12 h and 17–18 h):
+  anticipation it can only learn from the time-of-day features, because
+  meals are never announced.
+* **Less insulin at almost every glucose level, more above 250 mg/dL.**
+
+It is not a uniform improvement: the agent has higher TIR than the PID on 13
+of the 30 days and lower on others (worst: adult#001, about −10 TIR points on
+two days, spending more time high; one child#008 day has more hypoglycemia,
+9.0% vs 6.2%). Its gains come mostly from the three insulin-sensitive,
+hypo-prone patients (child#009, child#008, adolescent#010).
+
+``` bash
+python scripts/train_pooled.py --env-version v2 --residual 0.5 --tag v2-res-sac --seed 0
+python scripts/run_study.py --env-version v2 --residual 0.5 --tag v2-res-sac --seeds 0 1 2 3 4 --ensemble
+python scripts/analyze_residual.py --model models/pooled/v2-res-sac/best_seed{0,1,2,3,4}/best_model \
+    --example max-tbr-drop --out docs/residual_analysis.png
+```
 
 ### Methodology fixes (default)
 
@@ -377,7 +462,7 @@ in-process (one PyTorch process per run instead of one per environment).
 ```         
 diabetes_rl/                  reusable package
 ├── envs.py                   simglucose Gymnasium env registration + factory
-├── wrappers.py               v1 + v2 agent wrappers, episode control, env factory
+├── wrappers.py               v1 + v2 + residual-PID agent wrappers, episode control, env factory
 ├── cohorts.py                patient cohorts + train/validation/test splits
 ├── patients.py               per-patient basal rate, CR, CF (pump settings)
 ├── rewards.py                asymmetric reward functions (Magni, zone)
@@ -398,6 +483,7 @@ scripts/
 ├── benchmark.py              baselines vs agent(s)/ensemble (+ shield, significance test)
 ├── run_study.py              train + benchmark several seeds end to end
 ├── compare_studies.py        all configurations side by side (table + figure)
+├── analyze_residual.py       what a residual agent changes vs the PID (figure)
 ├── tune_pid.py               tune the basal-scaled PID on training patients
 ├── plot_study.py             multi-seed study figure
 └── plot_training.py          learning curve from the eval logs
@@ -482,10 +568,14 @@ tensorboard --logdir logs
     the overdosing and the seed-to-seed safety variance
 -   [x] Tuned, patient-scaled PID (`BasalPIDController`) as a stronger
     classical baseline
--   [ ] Beat the tuned basal-scaled PID: meal announcement, constrained RL,
-    residual RL on top of the PID
--   [ ] Finish the stopped runs (v2-SAC and 8x-cap seed 4, RecurrentPPO seed 2)
-    and try CrossQ (all supported by `train_pooled.py`; runs are resumable)
+-   [x] **Residual RL on top of the tuned PID** (5 seeds + scale ablation):
+    matches the PID's time in range with less hypoglycemia; +4.9 TIR over
+    plain SAC
+-   [x] Finished the stopped v2-SAC and 8x-cap seed-4 runs
+-   [ ] Clearly *beat* the tuned PID: residual RL on a meal-aware base
+    controller, constrained RL, a reward that values time in range
+-   [ ] RecurrentPPO seed 2 and CrossQ (supported by `train_pooled.py`;
+    runs are resumable)
 -   [ ] Ablations: v1 vs v2 state; absolute vs basal-relative action; reward
     (Magni vs zone); shield during training vs evaluation only
 -   [ ] Constrained RL (maximize TIR subject to TBR < 4%, e.g. Lagrangian SAC/PPO)

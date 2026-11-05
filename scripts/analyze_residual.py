@@ -3,7 +3,8 @@ What did the residual agent learn? Runs the tuned basal PID and a residual RL
 agent (ResidualPIDWrapper, ``--residual``) on the same held-out test days and
 shows *where* the agent overrides the PID.
 
-    a) an example day (the day with the median TIR gain: representative, not the best)
+    a) an example day (--example: the median TIR gain [default], the largest
+       drop in time below range, or the largest TIR loss; the panel title says which)
     b) the same day: insulin dose as a multiple of the prescribed basal rate
     c) mean correction = agent dose - PID proposal (x basal), by hour of day
     d) mean correction by the CGM reading at the time of the decision
@@ -41,6 +42,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PID_C, AGENT_C = "#2a78d6", "#eb6834"
 SURFACE, INK, INK2, GRID = "#fcfcfb", "#0b0b0b", "#52514e", "#e4e3df"
 CGM_BINS = [0, 70, 100, 140, 180, 250, 1000]
+EXAMPLES = {"median": "median TIR gain", "max-tbr-drop": "largest TBR drop", "worst": "largest TIR loss"}
 
 
 def run_day(cfg, patient, seed, runners=None):
@@ -93,6 +95,8 @@ def main():
     p.add_argument("--model", nargs="+", required=True)
     p.add_argument("--patients", nargs="+", default=None, help="default: the 6 held-out test patients")
     p.add_argument("--seeds", type=int, default=5, help="days per patient (benchmark seeds 0..k-1)")
+    p.add_argument("--example", default="median", choices=list(EXAMPLES),
+                   help="which day panels a-b show (panels c-d always pool every day)")
     p.add_argument("--out", default=os.path.join(ROOT, "results", "residual_analysis.png"))
     args = p.parse_args()
 
@@ -128,15 +132,16 @@ def main():
     cgm = np.concatenate([d[3]["cgm"] for d in days])
     corr = np.concatenate([d[3]["dose_mult"] - d[3]["pid_mult"] for d in days])
 
-    # representative example: the day whose TIR gain is the median gain
-    ex = days[int(np.argmin(np.abs(gains - np.median(gains))))]
-    pt, s, pid, ag = ex
+    tbr_drop = np.array([d[2]["metrics"]["time_hypo_pct"] - d[3]["metrics"]["time_hypo_pct"] for d in days])
+    pick = {"median": int(np.argmin(np.abs(gains - np.median(gains)))),
+            "max-tbr-drop": int(np.argmax(tbr_drop)), "worst": int(np.argmin(gains))}[args.example]
+    pt, s, pid, ag = days[pick]
 
     fig, axes = plt.subplots(2, 2, figsize=(11.5, 7.6), facecolor=SURFACE)
     (a1, a2), (a3, a4) = axes
     hrs = lambda d: d["minute"][0] / 60.0 + np.arange(len(d["bg"])) * 3 / 60.0  # clock time, unwrapped
     clock = matplotlib.ticker.FuncFormatter(lambda v, _: f"{int(round(v)) % 24:02d}:00")
-    style(a1, f"a) Example day ({pt}, day {s}; median TIR gain): blood glucose")
+    style(a1, f"a) Example day: {pt}, day {s} ({EXAMPLES[args.example]})")
     a1.axhspan(70, 180, color="#e9f3ea", zorder=0)
     a1.text(hrs(pid)[-1], 72, "target 70-180 ", color=INK2, fontsize=8, va="bottom", ha="right")
     for d, c, lab in ((pid, PID_C, "Tuned PID"), (ag, AGENT_C, "Residual agent")):
