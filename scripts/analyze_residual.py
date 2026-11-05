@@ -126,7 +126,7 @@ def main():
     print(f"\n{len(days)} days, {len(runners)} model(s): {base} TIR {mean('time_in_range_pct', 'pid'):.1f}% "
           f"TBR {mean('time_hypo_pct', 'pid'):.1f}% | residual agent TIR {mean('time_in_range_pct', 'agent'):.1f}% "
           f"TBR {mean('time_hypo_pct', 'agent'):.1f}% | TIR gain per day: median {np.median(gains):+.1f}, "
-          f"better on {int((gains > 0).sum())}/{len(days)} days | mean insulin vs PID: {ins_ratio:.2f}x")
+          f"better on {int((gains > 0).sum())}/{len(days)} days | mean insulin vs {base}: {ins_ratio:.2f}x")
 
     # pooled corrections over every agent step
     minute = np.concatenate([d[3]["minute"] for d in days])

@@ -231,10 +231,10 @@ alone would not fix. Methodology fixes are on by default; everything that
 would change the original setup is **opt-in** (`--env-version v2`, `--algo`,
 `--shield`), so the v1 results stay reproducible.
 
-> **Status:** 35 training runs completed: the 21 runs of the first v2 study,
-> seed 4 of v2-SAC and of the 8x-cap variant, and 12 residual-RL runs
-> (RecurrentPPO seed 2 and CrossQ were not run). All models were trained and
-> scored with the code in this repository.
+> **Status:** 42 training runs completed: the 21 runs of the first v2 study,
+> seed 4 of v2-SAC and of the 8x-cap variant, and 19 residual-RL runs (4
+> more were stopped as failed; RecurrentPPO seed 2 and CrossQ were not run).
+> All models were trained and scored with the code in this repository.
 
 ### Results: held-out test patients (6 patients × 5 days)
 
@@ -262,6 +262,7 @@ seeds of a configuration.
 | Residual SAC, scale 1.0 (ablation) | 3 | 74.7% ± 1.2 | 0.8% ± 0.1 | 0.3% | 29 | 90% | –1.4 (p = 0.041) |
 | Residual SAC, zone reward (ablation) | 4 | 77.5% ± 0.8 | 2.5% ± 0.5 | 0.8% | 29 | 92% | **+1.4 (p = 0.001)** |
 | ↳ ensemble of the 4 seeds | – | 77.8% | 2.2% | 0.9% | 28 | 93% | +1.7 |
+| Residual PPO on the tuned PID (ablation) | 3 | 72.4% ± 1.1 | 1.1% ± 0.2 | 0.2% | 32 | 84% | –3.7 (p = 0.002) |
 
 GRI = Glycemia Risk Index (0–100, a composite of time low and time high;
 lower is better).
@@ -299,7 +300,11 @@ lower is better).
    plain SAC on the same environment it gains **+4.9 TIR points at the same
    hypoglycemia** (p < 0.001, better on 28 of 30 days; GRI −4.4,
    p < 0.001), and its 5 seeds agree closely (± 1.2 TIR). See
-   [Residual RL](#residual-rl-on-top-of-the-tuned-pid).
+   [Residual RL](#residual-rl-on-top-of-the-tuned-pid). The idea transfers
+   only partly to PPO: residual PPO beats plain PPO by +5.2 TIR (p < 0.001)
+   but stays 3.7 points below the PID. Its validation score was best at
+   24–49k steps and only got worse afterwards: PPO's on-policy updates move
+   the policy away from the PID quickly, while SAC's stay close to it.
 7. **The reward sets the trade-off, and the averages hide who pays for
    it.** The Magni risk used everywhere costs as much at 70 mg/dL as at
    ~280 mg/dL, so agents trade time in range for fewer lows. With the
@@ -385,6 +390,40 @@ python scripts/run_study.py --env-version v2 --residual 0.5 --tag v2-res-sac --s
 python scripts/analyze_residual.py --model models/pooled/v2-res-sac/best_seed{0,1,2,3,4}/best_model \
     --example max-tbr-drop --out docs/residual_analysis.png
 ```
+
+### Hybrid closed loop: residual RL on meal-announced basal-bolus
+
+The same idea on top of the basal-bolus reference (`--residual-base bb`,
+`ResidualBBWrapper`). This controller is **told the carbs of every meal**,
+like a commercial "hybrid closed loop" where the user enters meals, so it
+belongs to a different category than the CGM-only controllers above.
+Basal-bolus has the best time in range of any baseline (79.7%) but too many
+lows (5.7%; 10.9% in children). The agent multiplies its dose by
+`1 + 0.5·a`: it can trim or enlarge a meal bolus by up to 50% and run basal
+from 0.5× to 1.5×. Action 0 is basal-bolus exactly (unit test). A bolus is
+~50–150× the basal rate, so the correction is multiplicative and the
+observation uses log-scaled insulin features plus carbs on board.
+
+| Controller (meals announced) | Seeds | Time in Range ↑ | TBR <70 ↓ | TBR <54 ↓ | GRI ↓ | Survived |
+|----|----|----|----|----|----|----|
+| Basal-bolus | – | 79.7% | 5.7% | 1.7% | 32 | 97% |
+| Residual SAC on basal-bolus (Magni reward) | 4 | 72.0% ± 5.8 | 1.2% ± 0.9 | 0.3% | 32 | 94% |
+| ↳ best seed (3) | 1 | **81.6%** | **2.8%** | 0.9% | **25** | 97% |
+
+* **Safer, but it pays in time in range.** Averaged over seeds the agent
+  cuts hypoglycemia by 4.4 points (p = 0.002) and severe lows by 1.4
+  (p = 0.018) but loses 7.8 TIR points (p = 0.01): GRI unchanged. Three of
+  the four seeds became over-cautious (66–70% TIR, ~30% of the day high).
+* **One seed shows what is possible:** 81.6% TIR with 2.8% TBR and GRI 25,
+  better than basal-bolus on every metric and the lowest GRI of any
+  controller in the study. Its checkpoint was the earliest (49k steps,
+  closest to basal-bolus); the others were selected later, after drifting
+  toward caution. Under the Magni reward, validation rewards that drift.
+* **Bounding the correction matters more here.** With ±100% authority (dose
+  0–2× basal-bolus, i.e. a meal bolus can be doubled or skipped) all four
+  seeds peaked at 24k steps and then degraded until they crashed most
+  validation days; those runs were stopped at 150–200k steps. ±50% trained
+  stably.
 
 ### Methodology fixes (default)
 
