@@ -45,7 +45,10 @@ UVA/Padova Type-1 Diabetes simulator.**
 > Index**, beats that PID on every glycemic metric over 120 held-out
 > patient-days, using CGM only: **78.2% vs 75.6% time in range, 1.8% vs 2.7%
 > time below 70, 0.5% vs 0.8% below 54, GRI 27.4 vs 31.2** (5-seed
-> ensemble; all paired p ≤ 0.02). No age group pays for it, unlike with a
+> ensemble; all paired p ≤ 0.02). The reward is the bigger lever: plain SAC
+> on the same GRI reward already matches the PID's time in range with fewer
+> lows, and the residual structure adds about 2 TIR points on top. No age
+> group pays for it, unlike with a
 > TIR-only reward; it does crash one more of the 120 days (hyperglycemia in
 > the same child as the PID's 8 crashes). With announced meals, the same
 > idea on top of basal-bolus keeps its time in range while halving its
@@ -235,8 +238,9 @@ alone would not fix. Methodology fixes are on by default; everything that
 would change the original setup is **opt-in** (`--env-version v2`, `--algo`,
 `--shield`), so the v1 results stay reproducible.
 
-> **Status:** 55 training runs completed: the 21 runs of the first v2 study,
-> seed 4 of v2-SAC and of the 8x-cap variant, and 32 residual-RL runs (4
+> **Status:** 59 training runs completed: the 21 runs of the first v2 study,
+> seed 4 of v2-SAC and of the 8x-cap variant, 3 plain-SAC runs with the GRI
+> reward, and 33 residual-RL runs (4
 > more were stopped as failed; RecurrentPPO seed 2 and CrossQ were not run).
 > All models were trained and scored with the code in this repository.
 
@@ -258,6 +262,8 @@ seeds of a configuration.
 | SAC, v2 env | 5 | 71.1% ± 2.0 | 0.9% ± 0.6 | 0.0% | 32 | 87% | –4.9 (p = 0.002) |
 | ↳ ensemble of the 5 seeds | – | 71.7% | 1.0% | 0.0% | 32 | 90% | –4.4 (p = 0.004) |
 | SAC, v2 env, dose cap 8× basal | 5 | 72.3% ± 1.4 | 1.0% ± 0.6 | 0.2% | 31 | 89% | –3.7 (p = 0.007) |
+| SAC, v2 env, 8× cap, **GRI reward** | 3 | 76.7% ± 0.4 | 0.9% ± 0.4 | 0.1% | 27 | 91% | +0.7 (p = 0.37) |
+| ↳ ensemble of the 3 seeds | – | 76.2% | 1.1% | 0.3% | 28 | 93% | +0.1 (p = 0.38) |
 | TQC, v2 env | 3 | 67.9% ± 1.0 | 0.5% ± 0.6 | 0.0% | 35 | 84% | –8.2 (p < 0.001) |
 | PPO, v2 env | 3 | 67.2% ± 2.4 | 0.5% ± 0.3 | 0.0% | 36 | 83% | –8.9 (p < 0.001) |
 | RecurrentPPO, v2 env | 2 | 65.9% ± 8.5 | 2.5% ± 2.1 | 0.6% | 42 | 87% | –10.2 (p < 0.001) |
@@ -288,11 +294,12 @@ lower is better).
    on v2 all land at 67–72% TIR with ≤ 1% hypoglycemia; TQC and PPO are more
    conservative (more time high). RecurrentPPO's two seeds disagree by 17 TIR
    points (57% vs 74%), the least reliable at this training budget.
-4. **RL learned from scratch does not beat a well-tuned classical
-   controller here.** The best plain agents are 4–5 TIR points below the
-   basal-scaled PID tuned on training patients, at similar or lower
-   hypoglycemia. Raising the dose cap from 5× to 8× basal (the PID's cap)
-   adds only +1.2 points: the cap was not the main gap.
+4. **With the Magni reward, RL learned from scratch does not beat a
+   well-tuned classical controller.** The best plain agents are 4–5 TIR
+   points below the basal-scaled PID tuned on training patients, at similar
+   or lower hypoglycemia. Raising the dose cap from 5× to 8× basal (the
+   PID's cap) adds only +1.2 points: the cap was not the main gap. The
+   reward was (finding 8).
 5. **Seed ensembles help a little; a safety shield helps only unsafe
    controllers.** Median-dose ensembles match or slightly beat the average
    seed. The shield cuts v1-SAC's severe hypoglycemia from 22.0% to 11.7% and
@@ -336,6 +343,15 @@ lower is better).
    p = 0.05) over the 30 days, and no age group pays for it (children 74%
    TIR / 4.1% TBR vs the PID's 74% / 5.0%). Over 120 days its ensemble beats
    the PID on every metric (below).
+   **The reward was the main bottleneck; the residual structure adds on
+   top.** Plain SAC (8× cap) trained on the same GRI reward reaches 76.7%
+   TIR with 0.9% TBR, +4.4 TIR over the same SAC with the Magni reward
+   (p < 0.001); over 120 days it matches the PID's time in range (+0.6,
+   n.s.) with significantly fewer lows (−1.2, p = 0.001). The residual
+   agent adds +1.6–2.1 TIR points and a lower GRI over plain SAC on the same
+   reward (both p < 0.01 over 120 days), at slightly more hypoglycemia that
+   is still below the PID's. It is the only controller here that beats the
+   PID on every metric.
 
 **What would most likely help next:** the remaining failures are
 hyperglycemic crashes in one child (child#008), which every CGM-only
@@ -361,6 +377,7 @@ before), with the seed ensembles of each configuration
 | PID scaled to basal, tuned | 75.6% | 2.7% | 0.8% | 31.2 | 93% | – |
 | Basal-bolus, meals announced (reference) | 80.1% | 5.9% | 2.3% | 30.2 | 98% | – |
 | SAC, v2 env (5-seed ensemble) | 72.1% | 1.0% | 0.1% | 31.9 | 90% | TIR –3.5, TBR –1.7 (both p < 0.001) |
+| SAC, v2 env, 8× cap, GRI reward (3-seed ensemble) | 76.2% | 1.5% | 0.5% | 29.0 | 93% | TIR +0.6 (n.s.), TBR –1.2 (p = 0.001), GRI –2.2 (n.s.) |
 | **Residual SAC on the PID** (5-seed ensemble) | 75.3% | 2.2% | 1.0% | 30.3 | 93% | TIR –0.3 (p = 0.02), TBR –0.6 (p = 0.13) |
 | Residual SAC, zone reward (4-seed ensemble) | 77.3% | 3.5% | 1.3% | 30.7 | 94% | TIR +1.7, TBR +0.8, TBR<54 +0.5 (all p ≤ 0.001) |
 | **Residual SAC, GRI reward** (5-seed ensemble) | **78.2%** | **1.8%** | **0.5%** | **27.4** | 92% | TIR **+2.6**, TBR **–0.9**, GRI **–3.8** (all p < 0.001), TBR<54 **–0.3** (p = 0.02) |
@@ -399,8 +416,8 @@ regenerates the tables and figures from them.
 
 ### Residual RL on top of the tuned PID
 
-Plain agents learn the whole controller from scratch and landed 4–5 TIR
-points below the tuned PID. Residual RL **keeps the PID and learns a bounded
+Plain agents learn the whole controller from scratch and, with the Magni
+reward, landed 4–5 TIR points below the tuned PID. Residual RL **keeps the PID and learns a bounded
 correction to it** (`--residual SCALE`, `ResidualPIDWrapper`):
 
 ```
@@ -482,8 +499,8 @@ observation uses log-scaled insulin features plus carbs on board.
 | ↳ best seed (3) | 1 | 81.6% | 2.8% | 0.9% | 25 | 97% |
 | **Residual SAC on basal-bolus (zone reward)** | 5 | **78.3% ± 3.3** | **3.0% ± 1.7** | 1.0% | **29** | 95% |
 | ↳ ensemble of the 5 seeds | – | 79.5% | 3.6% | 0.9% | 29 | 97% |
-| Residual SAC on basal-bolus (GRI reward) | 3 | 78.0% ± 1.0 | 3.5% ± 1.3 | 1.0% | 30 | 94% |
-| ↳ ensemble of the 3 seeds | – | 78.8% | 3.1% | 1.2% | 28 | 93% |
+| Residual SAC on basal-bolus (GRI reward) | 4 | 77.8% ± 1.0 | 3.2% ± 1.2 | 1.1% | 30 | 94% |
+| ↳ ensemble of the 4 seeds | – | 79.5% | 2.5% | 0.9% | 27 | 93% |
 
 ![What the hybrid agent learned](docs/residual_bb_analysis.png)
 
@@ -738,6 +755,8 @@ tensorboard --logdir logs
     keeps its time in range and halves its hypoglycemia (120-day test)
 -   [x] Beat the tuned PID on every glycemic metric with CGM only:
     residual SAC with a Glycemia Risk Index reward (120-day test)
+-   [x] Reward vs residual ablation: plain SAC with the GRI reward matches
+    the PID's TIR with fewer lows; the residual structure adds ~2 TIR
 -   [x] Hybrid closed loop with the GRI reward (same as the zone reward)
 -   [ ] A less variable hybrid (more seeds, early stopping, a bolus-only
     correction)

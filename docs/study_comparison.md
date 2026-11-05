@@ -14,6 +14,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 |   ↳ ensemble of 5 seeds (median dose) | - | 71.7 | 1.0 | 0.0 | 32 | 90% | - | TIR +17.2 (p=0.000)*; TBR -10.2 (p=0.000)* | TIR -4.4 (p=0.004)*; TBR -1.0 (p=0.161) |
 | SAC, v2 env, dose cap 8x basal | 5 | 72.3 ± 1.4 | 1.0 ± 0.6 | 0.2 | 31 | 89% | 5/5 | TIR +17.8 (p=0.000)*; TBR -10.2 (p=0.000)* | TIR -3.7 (p=0.007)*; TBR -1.1 (p=0.123) |
 |   ↳ ensemble of 5 seeds (median dose) | - | 71.8 | 0.9 | 0.3 | 31 | 93% | - | TIR +17.3 (p=0.000)*; TBR -10.4 (p=0.001)* | TIR -4.2 (p=0.007)*; TBR -1.2 (p=0.310) |
+| SAC, v2 env, 8x cap, GRI reward | 3 | 76.7 ± 0.4 | 0.9 ± 0.4 | 0.1 | 27 | 91% | 3/3 | TIR +22.2 (p=0.000)*; TBR -10.4 (p=0.000)* | TIR +0.7 (p=0.370); TBR -1.2 (p=0.169) |
+|   ↳ ensemble of 3 seeds (median dose) | - | 76.2 | 1.1 | 0.3 | 28 | 93% | - | TIR +21.7 (p=0.000)*; TBR -10.1 (p=0.001)* | TIR +0.1 (p=0.375); TBR -1.0 (p=0.263) |
 | TQC, v2 env | 3 | 67.9 ± 1.0 | 0.5 ± 0.6 | 0.0 | 35 | 84% | 3/3 | TIR +13.4 (p=0.000)*; TBR -10.8 (p=0.000)* | TIR -8.2 (p=0.000)*; TBR -1.6 (p=0.051) |
 |   ↳ ensemble of 3 seeds (median dose) | - | 68.6 | 0.0 | 0.0 | 33 | 83% | - | TIR +14.1 (p=0.000)*; TBR -11.2 (p=0.000)* | TIR -7.4 (p=0.001)*; TBR -2.0 (p=0.028)* |
 | PPO, v2 env | 3 | 67.2 ± 2.4 | 0.5 ± 0.3 | 0.0 | 36 | 83% | 3/3 | TIR +12.6 (p=0.000)*; TBR -10.8 (p=0.000)* | TIR -8.9 (p=0.000)*; TBR -1.6 (p=0.028)* |
@@ -33,8 +35,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 |   ↳ ensemble of 4 seeds (median dose) | - | 69.9 | 0.5 | 0.1 | 33 | 93% | - | TIR +15.4 (p=0.000)*; TBR -10.7 (p=0.000)* | TIR -6.1 (p=0.008)*; TBR -1.5 (p=0.176) |
 | Residual SAC on basal-bolus, zone reward* | 5 | 78.3 ± 3.3 | 3.0 ± 1.7 | 1.0 | 29 | 95% | 2/5 | TIR +23.8 (p=0.000)*; TBR -8.2 (p=0.002)* | TIR +2.3 (p=0.318); TBR +1.0 (p=0.492) |
 |   ↳ ensemble of 5 seeds (median dose) | - | 79.5 | 3.6 | 0.9 | 29 | 97% | - | TIR +25.0 (p=0.000)*; TBR -7.7 (p=0.004)* | TIR +3.5 (p=0.177); TBR +1.5 (p=0.382) |
-| Residual SAC on basal-bolus, GRI reward* | 3 | 78.0 ± 1.0 | 3.5 ± 1.3 | 1.0 | 30 | 94% | 1/3 | TIR +23.5 (p=0.000)*; TBR -7.8 (p=0.002)* | TIR +1.9 (p=0.465); TBR +1.4 (p=0.246) |
-|   ↳ ensemble of 3 seeds (median dose) | - | 78.8 | 3.1 | 1.2 | 28 | 93% | - | TIR +24.3 (p=0.000)*; TBR -8.2 (p=0.004)* | TIR +2.7 (p=0.328); TBR +1.0 (p=0.753) |
+| Residual SAC on basal-bolus, GRI reward* | 4 | 77.8 ± 1.0 | 3.2 ± 1.2 | 1.1 | 30 | 94% | 2/4 | TIR +23.2 (p=0.000)*; TBR -8.0 (p=0.001)* | TIR +1.7 (p=0.465); TBR +1.1 (p=0.296) |
+|   ↳ ensemble of 4 seeds (median dose) | - | 79.5 | 2.5 | 0.9 | 27 | 93% | - | TIR +25.0 (p=0.000)*; TBR -8.7 (p=0.001)* | TIR +3.5 (p=0.131); TBR +0.4 (p=0.859) |
 
 **By patient cohort** (no shield)
 
@@ -50,6 +52,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 | SAC, v2 env: ensemble | 71% / 3.1% | 70% / 0.0% | 74% / 0.0% |
 | SAC, v2 env, dose cap 8x basal | 75% / 3.0% | 70% / 0.0% | 72% / 0.0% |
 | SAC, v2 env, dose cap 8x basal: ensemble | 74% / 2.6% | 70% / 0.0% | 72% / 0.0% |
+| SAC, v2 env, 8x cap, GRI reward | 74% / 2.6% | 74% / 0.0% | 82% / 0.0% |
+| SAC, v2 env, 8x cap, GRI reward: ensemble | 73% / 3.3% | 75% / 0.0% | 81% / 0.0% |
 | TQC, v2 env | 75% / 0.9% | 65% / 0.5% | 64% / 0.0% |
 | TQC, v2 env: ensemble | 76% / 0.1% | 66% / 0.0% | 64% / 0.0% |
 | PPO, v2 env | 75% / 1.4% | 65% / 0.0% | 62% / 0.0% |
@@ -69,8 +73,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 | Residual SAC on basal-bolus, Magni reward: ensemble | 75% / 0.0% | 61% / 1.6% | 74% / 0.0% |
 | Residual SAC on basal-bolus, zone reward | 73% / 4.6% | 75% / 3.0% | 87% / 1.6% |
 | Residual SAC on basal-bolus, zone reward: ensemble | 74% / 4.2% | 78% / 3.2% | 87% / 3.3% |
-| Residual SAC on basal-bolus, GRI reward | 73% / 4.9% | 75% / 3.4% | 86% / 2.1% |
-| Residual SAC on basal-bolus, GRI reward: ensemble | 75% / 3.5% | 76% / 3.3% | 86% / 2.4% |
+| Residual SAC on basal-bolus, GRI reward | 72% / 5.0% | 75% / 3.0% | 86% / 1.6% |
+| Residual SAC on basal-bolus, GRI reward: ensemble | 75% / 3.2% | 77% / 3.1% | 87% / 1.2% |
 
 **Held-out test patients (6 patients x 5 days), every controller behind the safety shield**
 
@@ -88,6 +92,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 |   ↳ ensemble of 5 seeds (median dose) | - | 71.4 | 1.0 | 0.0 | 32 | 90% | - | TIR +16.4 (p=0.000)*; TBR -10.1 (p=0.000)* | TIR -4.7 (p=0.004)*; TBR -1.0 (p=0.161) |
 | SAC, v2 env, dose cap 8x basal | 5 | 72.0 ± 1.3 | 0.9 ± 0.6 | 0.3 | 31 | 89% | 5/5 | TIR +17.0 (p=0.000)*; TBR -10.2 (p=0.000)* | TIR -4.0 (p=0.003)*; TBR -1.1 (p=0.093) |
 |   ↳ ensemble of 5 seeds (median dose) | - | 71.7 | 0.8 | 0.3 | 31 | 93% | - | TIR +16.7 (p=0.000)*; TBR -10.3 (p=0.001)* | TIR -4.3 (p=0.005)*; TBR -1.2 (p=0.236) |
+| SAC, v2 env, 8x cap, GRI reward | 3 | 76.7 ± 0.3 | 0.8 ± 0.3 | 0.1 | 27 | 90% | 3/3 | TIR +21.7 (p=0.000)*; TBR -10.2 (p=0.000)* | TIR +0.7 (p=0.336); TBR -1.2 (p=0.139) |
+|   ↳ ensemble of 3 seeds (median dose) | - | 76.1 | 1.0 | 0.3 | 28 | 93% | - | TIR +21.1 (p=0.000)*; TBR -10.0 (p=0.000)* | TIR +0.0 (p=0.364); TBR -0.9 (p=0.263) |
 | TQC, v2 env | 3 | 67.9 ± 1.1 | 0.3 ± 0.3 | 0.0 | 35 | 84% | 3/3 | TIR +12.9 (p=0.000)*; TBR -10.7 (p=0.000)* | TIR -8.2 (p=0.000)*; TBR -1.7 (p=0.028)* |
 |   ↳ ensemble of 3 seeds (median dose) | - | 68.6 | 0.0 | 0.0 | 33 | 83% | - | TIR +13.6 (p=0.000)*; TBR -11.0 (p=0.000)* | TIR -7.5 (p=0.001)*; TBR -1.9 (p=0.028)* |
 | PPO, v2 env | 3 | 67.1 ± 2.4 | 0.5 ± 0.3 | 0.0 | 37 | 83% | 3/3 | TIR +12.1 (p=0.000)*; TBR -10.5 (p=0.000)* | TIR -9.0 (p=0.000)*; TBR -1.5 (p=0.028)* |
@@ -107,8 +113,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 |   ↳ ensemble of 4 seeds (median dose) | - | 68.7 | 0.4 | 0.0 | 34 | 93% | - | TIR +13.7 (p=0.000)*; TBR -10.6 (p=0.000)* | TIR -7.4 (p=0.003)*; TBR -1.5 (p=0.176) |
 | Residual SAC on basal-bolus, zone reward* | 5 | 76.2 ± 3.1 | 2.4 ± 1.3 | 0.9 | 31 | 93% | 5/5 | TIR +21.2 (p=0.000)*; TBR -8.6 (p=0.003)* | TIR +0.1 (p=0.808); TBR +0.4 (p=0.831) |
 |   ↳ ensemble of 5 seeds (median dose) | - | 79.0 | 2.2 | 0.8 | 27 | 93% | - | TIR +24.0 (p=0.000)*; TBR -8.8 (p=0.002)* | TIR +2.9 (p=0.213); TBR +0.2 (p=0.925) |
-| Residual SAC on basal-bolus, GRI reward* | 3 | 76.5 ± 1.7 | 2.5 ± 0.9 | 1.0 | 31 | 92% | 3/3 | TIR +21.5 (p=0.000)*; TBR -8.5 (p=0.002)* | TIR +0.4 (p=0.781); TBR +0.5 (p=0.831) |
-|   ↳ ensemble of 3 seeds (median dose) | - | 78.6 | 1.9 | 0.8 | 28 | 90% | - | TIR +23.6 (p=0.000)*; TBR -9.2 (p=0.001)* | TIR +2.5 (p=0.371); TBR -0.1 (p=0.583) |
+| Residual SAC on basal-bolus, GRI reward* | 4 | 76.4 ± 1.5 | 2.4 ± 0.8 | 0.9 | 30 | 92% | 4/4 | TIR +21.4 (p=0.000)*; TBR -8.7 (p=0.001)* | TIR +0.3 (p=0.777); TBR +0.4 (p=0.687) |
+|   ↳ ensemble of 4 seeds (median dose) | - | 79.4 | 1.8 | 0.9 | 27 | 90% | - | TIR +24.4 (p=0.000)*; TBR -9.2 (p=0.001)* | TIR +3.3 (p=0.253); TBR -0.1 (p=0.638) |
 
 **By patient cohort** (shielded)
 
@@ -124,6 +130,8 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 | SAC, v2 env: ensemble | 71% / 2.9% | 70% / 0.0% | 74% / 0.0% |
 | SAC, v2 env, dose cap 8x basal | 74% / 2.6% | 70% / 0.0% | 72% / 0.0% |
 | SAC, v2 env, dose cap 8x basal: ensemble | 74% / 2.3% | 70% / 0.0% | 71% / 0.0% |
+| SAC, v2 env, 8x cap, GRI reward | 75% / 2.4% | 74% / 0.0% | 81% / 0.0% |
+| SAC, v2 env, 8x cap, GRI reward: ensemble | 73% / 3.1% | 74% / 0.0% | 81% / 0.0% |
 | TQC, v2 env | 74% / 0.9% | 65% / 0.0% | 64% / 0.0% |
 | TQC, v2 env: ensemble | 75% / 0.1% | 66% / 0.0% | 64% / 0.0% |
 | PPO, v2 env | 75% / 1.4% | 65% / 0.0% | 62% / 0.0% |
@@ -143,5 +151,5 @@ Paired over the same patient-days (agents averaged over seeds); p from a Wilcoxo
 | Residual SAC on basal-bolus, Magni reward: ensemble | 73% / 0.0% | 61% / 1.3% | 72% / 0.0% |
 | Residual SAC on basal-bolus, zone reward | 72% / 3.1% | 72% / 2.9% | 84% / 1.2% |
 | Residual SAC on basal-bolus, zone reward: ensemble | 78% / 1.4% | 75% / 3.0% | 84% / 2.2% |
-| Residual SAC on basal-bolus, GRI reward | 73% / 3.0% | 72% / 3.3% | 85% / 1.3% |
-| Residual SAC on basal-bolus, GRI reward: ensemble | 77% / 1.9% | 72% / 3.1% | 86% / 0.5% |
+| Residual SAC on basal-bolus, GRI reward | 73% / 3.2% | 72% / 2.9% | 84% / 0.9% |
+| Residual SAC on basal-bolus, GRI reward: ensemble | 75% / 2.3% | 77% / 2.7% | 86% / 0.6% |

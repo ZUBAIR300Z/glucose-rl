@@ -38,12 +38,13 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STUDY = os.path.join(ROOT, "results", "study")
 SHIELD = "__shield"
 
-ORDER = ["v1-sac", "v2-sac", "v2-sac-m8", "v2-tqc", "v2-crossq", "v2-ppo", "v2-rppo", "v2-tqc-shield",
+ORDER = ["v1-sac", "v2-sac", "v2-sac-m8", "v2-sac-gri", "v2-tqc", "v2-crossq", "v2-ppo", "v2-rppo", "v2-tqc-shield",
          "v2-res-sac", "v2-res1-sac", "v2-res-sac-zone", "v2-res-sac-gri", "v2-res-ppo", "v2-res-bb", "v2-res-bb-zone", "v2-res-bb-gri"]
 TAG_LABELS = {
     "v1-sac": "SAC, v1 env (original setup)",
     "v2-sac": "SAC, v2 env",
     "v2-sac-m8": "SAC, v2 env, dose cap 8x basal",
+    "v2-sac-gri": "SAC, v2 env, 8x cap, GRI reward",
     "v2-tqc": "TQC, v2 env",
     "v2-crossq": "CrossQ, v2 env",
     "v2-ppo": "PPO, v2 env",
