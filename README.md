@@ -435,7 +435,14 @@ PID (0.97×) but redistributes it.
   meals are never announced.
 * **Less insulin at almost every glucose level, more above 250 mg/dL.**
 
-It is not a uniform improvement: the agent has higher TIR than the PID on 13
+**With the GRI reward** (`--reward gri`, finding 8) the agent keeps the
+overnight reduction but moves that insulin into the day: about +0.2–0.4×
+basal from 06:00 to 18:00, around meals, and *less* insulin above
+250 mg/dL, where stacked corrections cause the next low. Total insulin is
+unchanged (1.00× the PID's); it has higher TIR than the PID on 19 of the 30
+days ([figure](docs/residual_gri_analysis.png)).
+
+For the Magni-reward agent it is not a uniform improvement: it has higher TIR than the PID on 13
 of the 30 days and lower on others (worst: adult#001, about −10 TIR points on
 two days, spending more time high; one child#008 day has more hypoglycemia,
 9.0% vs 6.2%). Its gains come mostly from the three insulin-sensitive,

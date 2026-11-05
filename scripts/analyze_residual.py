@@ -198,7 +198,7 @@ def main():
     a4.set_xlabel("CGM at decision time (mg/dL)")
     a4.set_ylabel(f"agent dose - {base} dose (x basal)")
 
-    fig.suptitle(f"What the residual agent changes on top of {base.lower()} "
+    fig.suptitle(f"What the residual agent changes on top of {'the tuned PID' if base == 'Tuned PID' else base.lower()} "
                  f"({len(runners)} model{'s, median dose' if len(runners) > 1 else ''}; held-out test patients)",
                  x=0.01, ha="left", fontsize=12, color=INK)
     fig.tight_layout(rect=(0, 0, 1, 0.96))
