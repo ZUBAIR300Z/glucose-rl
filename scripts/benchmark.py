@@ -115,6 +115,9 @@ def main():
     p.add_argument("--ensemble-only", action="store_true",
                    help="with several --model paths: score only their median-action ensemble "
                         "(skip baselines and the individual models)")
+    p.add_argument("--no-baselines", action="store_true",
+                   help="score only the agent model(s) (+ their ensemble); e.g. to add a configuration "
+                        "to a benchmark whose baselines were already run with --no-agent")
     p.add_argument("--with-basal-pid", action="store_true",
                    help="add the basal-scaled PID (BasalPIDController, tuned gains)")
     p.add_argument("--shield", action="store_true", help="put the PLGS safety shield in front of every controller")
@@ -123,8 +126,9 @@ def main():
 
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
 
-    controllers = (["random", "pid"] + (["bpid"] if args.with_basal_pid else []) + ["basal"]
-                   + (["bb"] if args.with_bb else []))
+    controllers = [] if args.no_baselines else (
+        ["random", "pid"] + (["bpid"] if args.with_basal_pid else []) + ["basal"]
+        + (["bb"] if args.with_bb else []))
     runners, cfg = [], None
     if not args.no_agent:
         for path in args.model:

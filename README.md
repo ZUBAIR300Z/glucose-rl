@@ -48,7 +48,11 @@ UVA/Padova Type-1 Diabetes simulator.**
 > SAC on the same environment stays 3.5–4.9 TIR points lower. Trained with a
 > TIR-oriented reward, the residual agent beats the PID's time in range
 > (+1.7 points over 120 days, p < 0.001), at the cost of significantly more
-> hypoglycemia (+0.8 points), mostly in children. See [v2](#v2-review-fixes-and-a-redesigned-agent)
+> hypoglycemia (+0.8 points), mostly in children. With announced meals, the
+> same idea on top of basal-bolus (a "hybrid closed loop") keeps
+> basal-bolus's time in range (80.5% vs 80.1% over 120 days) while halving
+> its hypoglycemia (3.0% vs 5.9%) and severe lows (1.1% vs 2.3%; both
+> p < 0.001). See [v2](#v2-review-fixes-and-a-redesigned-agent)
 > and [Residual RL](#residual-rl-on-top-of-the-tuned-pid). The sections below
 > keep the original study as it was reported.
 
@@ -233,8 +237,8 @@ alone would not fix. Methodology fixes are on by default; everything that
 would change the original setup is **opt-in** (`--env-version v2`, `--algo`,
 `--shield`), so the v1 results stay reproducible.
 
-> **Status:** 42 training runs completed: the 21 runs of the first v2 study,
-> seed 4 of v2-SAC and of the 8x-cap variant, and 19 residual-RL runs (4
+> **Status:** 47 training runs completed: the 21 runs of the first v2 study,
+> seed 4 of v2-SAC and of the 8x-cap variant, and 24 residual-RL runs (4
 > more were stopped as failed; RecurrentPPO seed 2 and CrossQ were not run).
 > All models were trained and scored with the code in this repository.
 
@@ -344,12 +348,20 @@ before), with the seed ensembles of each configuration
 | SAC, v2 env (5-seed ensemble) | 72.1% | 1.0% | 0.1% | 31.9 | 90% | TIR –3.5, TBR –1.7 (both p < 0.001) |
 | **Residual SAC on the PID** (5-seed ensemble) | 75.3% | 2.2% | 1.0% | 30.3 | 93% | TIR –0.3 (p = 0.02), TBR –0.6 (p = 0.13) |
 | Residual SAC, zone reward (4-seed ensemble) | **77.3%** | 3.5% | 1.3% | 30.7 | 94% | TIR **+1.7**, TBR +0.8, TBR<54 +0.5 (all p ≤ 0.001) |
+| *Meals announced:* | | | | | | *vs basal-bolus, paired* |
+| Basal-bolus | 80.1% | 5.9% | 2.3% | 30.2 | 98% | – |
+| **Hybrid: residual SAC on basal-bolus, zone reward** (5-seed ensemble) | **80.5%** | **3.0%** | **1.1%** | **26.1** | 95% | TIR +0.5 (n.s.), TBR **–2.9**, TBR<54 **–1.2** (both p < 0.001) |
+| ↳ mean of the 5 seeds | 78.9% | 2.8% | 1.1% | 27.4 | 96% | TIR –1.1 (p = 0.02), TBR –3.1, TBR<54 –1.2 (both p < 0.001) |
 
 The 120-day test confirms the ordering but tempers the 30-day numbers: the
 Magni-reward residual agent is **equivalent** to the tuned PID (TIR within
 0.3 points; its lower hypoglycemia is not significant), and the zone-reward
 version buys +1.7 points of time in range with significantly more
-hypoglycemia. Neither dominates the PID on every metric.
+hypoglycemia. Neither dominates the PID on every metric. With announced
+meals, the hybrid residual agent keeps basal-bolus's time in range while
+**halving its hypoglycemia and severe lows**: the only meal-announced
+controller here that meets the < 4% target (survival 95% vs 98%: see the
+child#008 caveat in the [hybrid section](#hybrid-closed-loop-residual-rl-on-meal-announced-basal-bolus)).
 
 Full tables, including per-cohort results and the evaluation with every
 controller behind the safety shield, are in
@@ -433,22 +445,49 @@ observation uses log-scaled insulin features plus carbs on board.
 |----|----|----|----|----|----|----|
 | Basal-bolus | – | 79.7% | 5.7% | 1.7% | 32 | 97% |
 | Residual SAC on basal-bolus (Magni reward) | 4 | 72.0% ± 5.8 | 1.2% ± 0.9 | 0.3% | 32 | 94% |
-| ↳ best seed (3) | 1 | **81.6%** | **2.8%** | 0.9% | **25** | 97% |
+| ↳ best seed (3) | 1 | 81.6% | 2.8% | 0.9% | 25 | 97% |
+| **Residual SAC on basal-bolus (zone reward)** | 5 | **78.3% ± 3.3** | **3.0% ± 1.7** | 1.0% | **29** | 95% |
+| ↳ ensemble of the 5 seeds | – | 79.5% | 3.6% | 0.9% | 29 | 97% |
 
-* **Safer, but it pays in time in range.** Averaged over seeds the agent
-  cuts hypoglycemia by 4.4 points (p = 0.002) and severe lows by 1.4
-  (p = 0.018) but loses 7.8 TIR points (p = 0.01): GRI unchanged. Three of
-  the four seeds became over-cautious (66–70% TIR, ~30% of the day high).
-* **One seed shows what is possible:** 81.6% TIR with 2.8% TBR and GRI 25,
-  better than basal-bolus on every metric and the lowest GRI of any
-  controller in the study. Its checkpoint was the earliest (49k steps,
-  closest to basal-bolus); the others were selected later, after drifting
-  toward caution. Under the Magni reward, validation rewards that drift.
+![What the hybrid agent learned](docs/residual_bb_analysis.png)
+
+What it learned (zone reward, 5-seed ensemble, 30 test days): it **trims
+the lunch and dinner boluses** (breakfast's much less), cuts insulin when
+glucose is below 140 mg/dL and adds a little above 180, using 0.93× the
+insulin of basal-bolus overall. On the example day (the largest
+reduction) two of the child's three post-meal lows disappear (TBR 24.4% →
+7.5%, TIR 69% → 80%).
+
+* **With the zone reward the hybrid keeps basal-bolus's time in range and
+  removes about half its hypoglycemia.** Paired over the 30 days (seeds
+  averaged): TBR −2.6 points (p = 0.005), TBR < 54 −0.7 (p = 0.03), TIR
+  −1.4 (n.s.). By cohort it fixes basal-bolus's weak spot, the children
+  (TBR 10.9% → 4.6%, TIR 68% → 73%), and gives a few TIR points back in
+  adolescents and adults. Seeds vary (72–81% TIR); 3 of 5 sit at
+  4.0–4.9% TBR, just above the 4% target. On the 120-day extended test the
+  5-seed ensemble matches basal-bolus's time in range (80.5% vs 80.1%) with
+  half its hypoglycemia (3.0% vs 5.9%) and severe lows (1.1% vs 2.3%; both
+  p < 0.001).
+* **With the Magni reward it is safer but pays in time in range.** Averaged
+  over seeds it cuts hypoglycemia by 4.4 points (p = 0.002) and severe lows
+  by 1.4 (p = 0.018) but loses 7.8 TIR points (p = 0.01). Three of the four
+  seeds became over-cautious (66–70% TIR, ~30% of the day high); the best
+  one (81.6% TIR, 2.8% TBR, GRI 25) was its earliest checkpoint, closest to
+  basal-bolus. The same reward lesson as finding 7, more strongly: a
+  controller with lots of time in range to lose needs a reward that values it.
+* **Where it fails:** every crash is in child#008, whose meals push even
+  the PID over 600 mg/dL on 3 of 5 days. Day 4 crashes basal-bolus with a
+  severe low after a large meal bolus (586 → 10 mg/dL); the zone-reward
+  agents crash that day too, either the same way (2 seeds) or, having
+  trimmed the bolus, above 600 mg/dL (3 seeds and the ensemble). Two seeds
+  also crash day 2 with hyperglycemia, a day basal-bolus survives.
 * **Bounding the correction matters more here.** With ±100% authority (dose
   0–2× basal-bolus, i.e. a meal bolus can be doubled or skipped) all four
   seeds peaked at 24k steps and then degraded until they crashed most
-  validation days; those runs were stopped at 150–200k steps. ±50% trained
-  stably.
+  validation days; those runs were stopped at 150–200k steps. ±50% avoided
+  that collapse, but with the zone reward the validation score still swung
+  between evaluations (best checkpoints mostly at 49k steps), so here
+  checkpoint selection on validation patients does real work.
 
 ### Methodology fixes (default)
 
@@ -654,8 +693,11 @@ tensorboard --logdir logs
     matches the PID's time in range with less hypoglycemia; +4.9 TIR over
     plain SAC
 -   [x] Finished the stopped v2-SAC and 8x-cap seed-4 runs
--   [ ] Clearly *beat* the tuned PID: residual RL on a meal-aware base
-    controller, constrained RL, a reward that values time in range
+-   [x] Hybrid closed loop (meals announced): residual RL on basal-bolus
+    keeps its time in range and halves its hypoglycemia (120-day test)
+-   [ ] Clearly *beat* the tuned PID on every metric with CGM only:
+    constrained RL with a per-cohort TBR limit; a less variable hybrid
+    (more seeds, early stopping, a bolus-only correction)
 -   [ ] RecurrentPPO seed 2 and CrossQ (supported by `train_pooled.py`;
     runs are resumable)
 -   [x] Residual ablations: scale 0.5 vs 1.0; Magni vs zone reward (zone

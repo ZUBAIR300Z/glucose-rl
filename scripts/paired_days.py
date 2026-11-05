@@ -37,10 +37,12 @@ def load(directory):
         if name.startswith("_"):
             continue
         df = pd.read_csv(f)
-        rows = df[df.controller == "ensemble"]
-        if rows.empty:
-            rows = df[df.controller == "agent"].groupby(["patient", "seed"]).mean(numeric_only=True).reset_index()
-        ctrl[name] = rows.set_index(["patient", "seed"])
+        ens, agents = df[df.controller == "ensemble"], df[df.controller == "agent"]
+        if not ens.empty:
+            ctrl[name] = ens.set_index(["patient", "seed"])
+        if not agents.empty:  # per-seed models: their mean on each day
+            mean = agents.groupby(["patient", "seed"]).mean(numeric_only=True)
+            ctrl[name if ens.empty else f"{name} (mean of {agents.model_idx.nunique()} seeds)"] = mean
     return ctrl
 
 
