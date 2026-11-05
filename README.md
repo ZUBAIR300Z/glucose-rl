@@ -42,11 +42,13 @@ UVA/Padova Type-1 Diabetes simulator.**
 > **Latest: residual RL reaches the classical bar.** An RL agent that learns
 > bounded corrections on top of the tuned, patient-scaled PID (residual SAC)
 > matches that PID on the 6 held-out patients: **76.0% vs 76.1% time in range,
-> with 1.1% vs 2.1% time below range** (5 training seeds, all meeting the
-> < 4% target). Plain SAC on the same environment stays 4.9 TIR points lower
-> at the same hypoglycemia. Trained with a TIR-oriented reward, the residual
-> agent beats the PID's time in range (+1.4 points, p = 0.001), but at the
-> cost of more hypoglycemia in children. See [v2](#v2-review-fixes-and-a-redesigned-agent)
+> with 1.1% vs 2.1% time below range** over 30 test days (5 training seeds,
+> all meeting the < 4% target), and 75.3% vs 75.6% with 2.2% vs 2.7% over an
+> extended 120-day test (the lower hypoglycemia is not significant). Plain
+> SAC on the same environment stays 3.5–4.9 TIR points lower. Trained with a
+> TIR-oriented reward, the residual agent beats the PID's time in range
+> (+1.7 points over 120 days, p < 0.001), at the cost of significantly more
+> hypoglycemia (+0.8 points), mostly in children. See [v2](#v2-review-fixes-and-a-redesigned-agent)
 > and [Residual RL](#residual-rl-on-top-of-the-tuned-pid). The sections below
 > keep the original study as it was reported.
 
@@ -296,7 +298,8 @@ lower is better).
    top of the tuned PID (instead of the whole controller) is the first RL
    configuration that reaches the classical bar: 76.0% TIR vs 76.1%, with
    1.1% vs 2.1% hypoglycemia and the lowest GRI of any CGM-only controller
-   (28 vs 30; the TBR and GRI gaps are within noise over 30 days). Against
+   (28 vs 30; the TBR and GRI gaps are within noise over 30 days, and over
+   the 120-day extended test below it is equivalent to the PID). Against
    plain SAC on the same environment it gains **+4.9 TIR points at the same
    hypoglycemia** (p < 0.001, better on 28 of 30 days; GRI −4.4,
    p < 0.001), and its 5 seeds agree closely (± 1.2 TIR). See
@@ -310,8 +313,9 @@ lower is better).
    ~280 mg/dL, so agents trade time in range for fewer lows. With the
    repository's TIR-oriented `zone` reward the residual agent **beats the
    tuned PID on time in range**: +1.4 points (p = 0.001, higher on 23 of 30
-   days), 77.5% vs 76.1%, at similar overall hypoglycemia (2.5% vs 2.1%,
-   n.s.). But by cohort the gain is all in adults (85% vs 80% TIR), while
+   days), 77.5% vs 76.1%, at similar overall hypoglycemia over 30 days
+   (2.5% vs 2.1%, n.s.; over 120 days the extra hypoglycemia, +0.8 points,
+   is significant). By cohort the gain is all in adults (85% vs 80% TIR), while
    children get *more* hypoglycemia (6.8% vs 5.0% TBR) and severe lows rise
    to 0.8% (vs 0.3%; still under the 1% target). The Magni-reward residual
    agent is the safer controller: it brings the children under the 4%
@@ -325,6 +329,27 @@ meal-aware controller is the natural next step), and constrained RL with an
 explicit TBR < 4% constraint per patient group instead of reward shaping:
 finding 7 shows a single averaged objective lets an agent trade one group's
 safety for another group's time in range.
+
+**Extended test: 120 held-out days.** 30 days cannot resolve differences of
+a point or two, so the key controllers were re-tested on 20 days per test
+patient (benchmark seeds 0–19; days 5–19 were never used for anything
+before), with the seed ensembles of each configuration
+([`docs/extended_results/`](docs/extended_results/summary.md),
+`scripts/paired_days.py`):
+
+| Controller (120 days) | TIR ↑ | TBR <70 ↓ | TBR <54 ↓ | GRI ↓ | Survived | vs tuned PID, paired |
+|----|----|----|----|----|----|----|
+| PID scaled to basal, tuned | 75.6% | 2.7% | 0.8% | 31.2 | 93% | – |
+| Basal-bolus, meals announced (reference) | 80.1% | 5.9% | 2.3% | 30.2 | 98% | – |
+| SAC, v2 env (5-seed ensemble) | 72.1% | 1.0% | 0.1% | 31.9 | 90% | TIR –3.5, TBR –1.7 (both p < 0.001) |
+| **Residual SAC on the PID** (5-seed ensemble) | 75.3% | 2.2% | 1.0% | 30.3 | 93% | TIR –0.3 (p = 0.02), TBR –0.6 (p = 0.13) |
+| Residual SAC, zone reward (4-seed ensemble) | **77.3%** | 3.5% | 1.3% | 30.7 | 94% | TIR **+1.7**, TBR +0.8, TBR<54 +0.5 (all p ≤ 0.001) |
+
+The 120-day test confirms the ordering but tempers the 30-day numbers: the
+Magni-reward residual agent is **equivalent** to the tuned PID (TIR within
+0.3 points; its lower hypoglycemia is not significant), and the zone-reward
+version buys +1.7 points of time in range with significantly more
+hypoglycemia. Neither dominates the PID on every metric.
 
 Full tables, including per-cohort results and the evaluation with every
 controller behind the safety shield, are in
@@ -539,7 +564,8 @@ scripts/
 ├── benchmark.py              baselines vs agent(s)/ensemble (+ shield, significance test)
 ├── run_study.py              train + benchmark several seeds end to end
 ├── compare_studies.py        all configurations side by side (table + figure)
-├── analyze_residual.py       what a residual agent changes vs the PID (figure)
+├── analyze_residual.py       what a residual agent changes vs its base controller (figure)
+├── paired_days.py            day-by-day paired tests between benchmark CSVs
 ├── tune_pid.py               tune the basal-scaled PID on training patients
 ├── plot_study.py             multi-seed study figure
 └── plot_training.py          learning curve from the eval logs
