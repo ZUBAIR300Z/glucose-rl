@@ -38,7 +38,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 STUDY = os.path.join(ROOT, "results", "study")
 SHIELD = "__shield"
 
-ORDER = ["v1-sac", "v2-sac", "v2-sac-m8", "v2-tqc", "v2-crossq", "v2-ppo", "v2-rppo", "v2-tqc-shield"]
+ORDER = ["v1-sac", "v2-sac", "v2-sac-m8", "v2-tqc", "v2-crossq", "v2-ppo", "v2-rppo", "v2-tqc-shield",
+         "v2-res-sac", "v2-res1-sac", "v2-res-sac-zone"]
 TAG_LABELS = {
     "v1-sac": "SAC, v1 env (original setup)",
     "v2-sac": "SAC, v2 env",
@@ -50,6 +51,7 @@ TAG_LABELS = {
     "v2-tqc-shield": "TQC, v2 env, shield in training",
     "v2-res-sac": "Residual SAC on tuned PID (scale 0.5)",
     "v2-res1-sac": "Residual SAC on tuned PID (scale 1.0)",
+    "v2-res-sac-zone": "Residual SAC on tuned PID, zone reward",
 }
 BASELINES = {"pid": "PID (repo)", "bpid": "PID scaled to basal, tuned",
              "basal": "Prescribed basal only", "bb": "Basal-bolus, meals announced*"}

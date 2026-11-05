@@ -11,6 +11,7 @@ parallel would thrash the CPU and be slower).
 Run from the project root (Anaconda Prompt; long -- hours):
     python scripts/run_study.py --seeds 0 1 2 --timesteps 500000 --n-envs 6
     python scripts/run_study.py --env-version v2 --algo tqc --tag v2-tqc --ensemble --shield-eval
+    python scripts/run_study.py --env-version v2 --residual 0.5 --tag v2-res-sac --ensemble
     python scripts/run_study.py --skip-train      # only benchmark + aggregate existing models
 """
 from __future__ import annotations
@@ -68,6 +69,10 @@ def main():
     p.add_argument("--reward", default="magni")
     p.add_argument("--learning-rate", type=float, default=None)
     p.add_argument("--shield-train", action="store_true", help="v2: train with the safety shield in the loop")
+    p.add_argument("--residual", type=float, default=0.0,
+                   help="v2: residual RL on top of the tuned basal PID with this scale (0 = off)")
+    p.add_argument("--max-multiplier", type=float, default=None,
+                   help="v2: dose cap as a multiple of basal (default 5; 8 with --residual)")
     p.add_argument("--shield-eval", action="store_true", help="evaluate every controller behind the safety shield")
     p.add_argument("--with-bb", action="store_true", help="add the meal-announced basal-bolus reference")
     p.add_argument("--ensemble", action="store_true", help="also benchmark the median-action ensemble of all seeds")
@@ -101,6 +106,10 @@ def main():
                 cmd += ["--learning-rate", args.learning_rate]
             if args.shield_train:
                 cmd += ["--shield"]
+            if args.residual:
+                cmd += ["--residual", args.residual]
+            if args.max_multiplier is not None:
+                cmd += ["--max-multiplier", args.max_multiplier]
             run(cmd)
 
         best = os.path.join(pooled_dir, f"best_seed{s}", "best_model")
