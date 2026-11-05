@@ -338,9 +338,13 @@ lower is better).
    the PID on every metric (below).
 
 **What would most likely help next:** the remaining failures are
-hyperglycemic crashes in one child (child#008), which every controller here
-shares; an explicit high-glucose constraint or meal announcement is the
-obvious lever. Beyond that: constrained RL with a TBR < 4% limit per patient
+hyperglycemic crashes in one child (child#008), which every CGM-only
+controller here shares. They are not a dose-cap artifact: raising the tuned
+PID's cap from 8× to 12×, 16× and 24× basal *increases* child#008's crash
+days (8 → 9 → 10 → 16 of 20) and its hypoglycemia, because insulin that
+reacts to the rise arrives too late and then stacks. Knowing the meal is
+what helps (basal-bolus crashes 3 of the same 20 days), so meal
+announcement, or meal detection from the CGM rise, is the lever. Beyond that: constrained RL with a TBR < 4% limit per patient
 group (finding 7 shows an averaged objective can trade one group's safety
 for another's time in range), more seeds or early stopping for the more
 variable hybrid, and validation beyond this one simulator.
