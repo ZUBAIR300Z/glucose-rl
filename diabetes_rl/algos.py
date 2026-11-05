@@ -76,6 +76,36 @@ def make_model(name: str, env, seed: int = 0, learning_rate: float | None = None
                gae_lambda=0.95, clip_range=0.2, ent_coef=0.0, **common)
 
 
+def zero_init_policy_head(model) -> None:
+    """Zero the layer that outputs the (mean) action, so the untrained policy's
+    deterministic action is exactly 0 for every observation.
+
+    For residual RL that makes the untrained agent identical to the base
+    controller (action 0 = "no correction"); exploration noise (SAC's learned
+    std, TD3's action noise, PPO's log-std) is untouched, and the zeroed layer
+    still receives gradients, so learning proceeds normally.
+    """
+    import torch as th
+
+    def zero(layer):
+        with th.no_grad():
+            layer.weight.zero_()
+            layer.bias.zero_()
+
+    pol = model.policy
+    if hasattr(pol, "action_net"):                      # PPO / RecurrentPPO
+        zero(pol.action_net)
+        return
+    for actor in (pol.actor, getattr(pol, "actor_target", None)):
+        if actor is None:
+            continue
+        mu = actor.mu
+        if isinstance(mu, th.nn.Linear):                 # SAC / TQC / CrossQ
+            zero(mu)
+        else:                                            # TD3: Sequential(..., Linear, Tanh)
+            zero([m for m in mu if isinstance(m, th.nn.Linear)][-1])
+
+
 def load_model(name: str, path: str):
     return algo_class(name).load(path)
 

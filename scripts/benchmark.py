@@ -135,8 +135,8 @@ def main():
             c = find_run_config(path)
             if args.algo:
                 c["algo"] = args.algo
-            if cfg is not None and (c["env_version"], c["history"], c["max_multiplier"]) != \
-                    (cfg["env_version"], cfg["history"], cfg["max_multiplier"]):
+            key = lambda k: (k["env_version"], k["history"], k["max_multiplier"], k.get("residual", 0.0))
+            if cfg is not None and key(c) != key(cfg):
                 sys.exit("all --model paths must share the same env config to be ensembled")
             cfg = c
             runners.append(PolicyRunner(load_model(c["algo"], path), recurrent=c["algo"] in RECURRENT))

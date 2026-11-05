@@ -30,6 +30,7 @@ from collections import deque
 import gymnasium as gym
 import numpy as np
 
+from diabetes_rl.baselines import BasalPIDController
 from diabetes_rl.envs import make_env, STEPS_PER_DAY
 from diabetes_rl.patients import basal_rate
 from diabetes_rl.safety import ShieldWrapper
@@ -184,6 +185,12 @@ def action_to_multiplier(a, max_multiplier: float):
     return 1.0 + a if a <= 0.0 else 1.0 + a * (max_multiplier - 1.0)
 
 
+def multiplier_to_action(m: float, max_multiplier: float) -> float:
+    """Inverse of :func:`action_to_multiplier` (``m`` clipped to [0, max_multiplier])."""
+    m = float(np.clip(m, 0.0, max_multiplier))
+    return m - 1.0 if m <= 1.0 else (m - 1.0) / (max_multiplier - 1.0)
+
+
 class GlucoseControlWrapper(gym.Wrapper):
     """v2 state/action/reward design. Differences from GlucoseTrendWrapper:
 
@@ -250,16 +257,25 @@ class GlucoseControlWrapper(gym.Wrapper):
         if t is not None:
             self.minute_of_day = t.hour * 60 + t.minute + t.second / 60.0
 
-    def _build_obs(self) -> np.ndarray:
+    def _features(self) -> np.ndarray:
         ang = 2 * np.pi * self.minute_of_day / 1440.0
-        obs = np.concatenate([
+        return np.concatenate([
             np.asarray(self.cgm_hist, dtype=np.float32) / self.CGM_SCALE,
             [np.clip(self._slope() / 4.0, -2.0, 2.0)],
             np.asarray(self.mult_hist, dtype=np.float32) / self.max_multiplier,
             [self._iob_rel() / self.max_multiplier],
             [np.sin(ang), np.cos(ang)],
         ]).astype(np.float32)
-        return np.clip(obs, self.observation_space.low, self.observation_space.high)
+
+    def _build_obs(self) -> np.ndarray:
+        return np.clip(self._features(), self.observation_space.low, self.observation_space.high)
+
+    # hooks for subclasses: called with the newest CGM before the observation is built
+    def _on_reset(self, cgm: float):
+        pass
+
+    def _on_step(self, cgm: float):
+        pass
 
     # -- gym API -------------------------------------------------------------
     def reset(self, **kwargs):
@@ -275,6 +291,7 @@ class GlucoseControlWrapper(gym.Wrapper):
         for _ in range(self.N_INSULIN_HIST):
             self.mult_hist.append(1.0)
         self._set_clock(info)
+        self._on_reset(cgm0)
         info = dict(info, patient_basal=self.basal)
         return self._build_obs(), info
 
@@ -287,6 +304,7 @@ class GlucoseControlWrapper(gym.Wrapper):
         self.mult_hist.append(insulin / self.basal)
         self._update_iob(insulin, info.get("sample_time", 3.0))
         self._set_clock(info)
+        self._on_step(float(obs[0]))
 
         reward = max(float(reward) * self.reward_scale, -1.0)
         if terminated:
@@ -295,11 +313,68 @@ class GlucoseControlWrapper(gym.Wrapper):
         return self._build_obs(), reward, terminated, truncated, info
 
 
+class ResidualPIDWrapper(GlucoseControlWrapper):
+    """Residual RL: the agent *corrects* the tuned basal-scaled PID instead of
+    replacing it.
+
+        final action = clip(a_pid + residual_scale * a_agent, -1, 1)
+
+    where ``a_pid`` is the dose of :class:`~diabetes_rl.baselines.BasalPIDController`
+    (tuned gains) written in the same basal-relative [-1, 1] action space. An
+    agent action of 0 reproduces the PID exactly, so learning starts from the
+    strongest classical controller (and, with a zero-initialized policy head,
+    the untrained agent *is* that PID). The agent only has to learn the
+    corrections a PID cannot express -- e.g. dosing harder early in a meal rise
+    that the time-of-day features make predictable, or backing off when insulin
+    on board is already high. ``residual_scale`` bounds its authority, which
+    also keeps early exploration close to a safe controller.
+
+    The observation is the v2 observation plus the PID's proposal ``a_pid`` and
+    its (normalized) integral term, so the agent sees what it is correcting.
+    Uses only CGM + the prescribed basal rate: the same information as the PID
+    and the plain v2 agent.
+    """
+
+    def __init__(self, env, residual_scale: float = 0.5, pid_kwargs: dict | None = None, **kw):
+        super().__init__(env, **kw)
+        self.residual_scale = float(residual_scale)
+        self.pid_kwargs = dict(pid_kwargs or {})
+        n = self.observation_space.shape[0] + 2
+        self.observation_space = gym.spaces.Box(low=-5.0, high=5.0, shape=(n,), dtype=np.float32)
+        self.pid = None
+        self.a_pid = 0.0
+
+    def _propose(self, cgm: float):
+        dose = float(self.pid.act(cgm)[0])
+        self.a_pid = multiplier_to_action(dose / self.basal, self.max_multiplier)
+
+    def _on_reset(self, cgm: float):
+        self.pid = BasalPIDController(self.patient_name, max_multiplier=self.max_multiplier,
+                                      **self.pid_kwargs)
+        self._propose(cgm)
+
+    def _on_step(self, cgm: float):
+        self._propose(cgm)
+
+    def _features(self) -> np.ndarray:
+        integral = self.pid.ki * self.pid.integral / self.max_multiplier if self.pid else 0.0
+        return np.concatenate([super()._features(),
+                               [self.a_pid, np.clip(integral, -2.0, 2.0)]]).astype(np.float32)
+
+    def step(self, action):
+        a = float(np.clip(np.asarray(action, dtype=np.float64).ravel()[0], -1.0, 1.0))
+        a_pid = self.a_pid
+        final = float(np.clip(a_pid + self.residual_scale * a, -1.0, 1.0))
+        obs, reward, terminated, truncated, info = super().step(np.array([final], dtype=np.float32))
+        info = dict(info, pid_action=a_pid, final_action=final)
+        return obs, reward, terminated, truncated, info
+
+
 def make_glucose_env(env_id, patient_name="adolescent#001", reward_fun=None,
                      env_seed=None, history_len=None, max_basal=DEFAULT_MAX_BASAL,
                      terminal_penalty=None, max_episode_steps=STEPS_PER_DAY,
                      env_version="v1", fresh_episodes=None, fixed_episodes=None,
-                     max_multiplier=5.0, gamma=0.99, shield=False):
+                     max_multiplier=5.0, gamma=0.99, shield=False, residual=0.0):
     """Build the full agent environment, identically for training and evaluation.
 
     Stacks: simglucose env -> episode control -> state/action/reward wrapper.
@@ -311,6 +386,9 @@ def make_glucose_env(env_id, patient_name="adolescent#001", reward_fun=None,
       on for a list of patients (as before); pass True for single-patient training.
     * ``fixed_episodes``: list of ``(patient, seed)`` days to cycle through
       deterministically (validation). Overrides ``fresh_episodes``.
+    * ``residual`` > 0 (v2 only): residual RL around the tuned basal PID
+      (ResidualPIDWrapper) with that residual scale; use ``max_multiplier=8``,
+      the cap the PID was tuned with.
 
     Using one factory everywhere guarantees train/eval use the exact same setup.
     """
@@ -323,15 +401,18 @@ def make_glucose_env(env_id, patient_name="adolescent#001", reward_fun=None,
     if shield:
         env = ShieldWrapper(env)   # acts on raw U/min, below the agent wrapper
 
+    if residual and env_version != "v2":
+        raise ValueError("residual RL needs env_version='v2'")
     if env_version == "v1":
         env = GlucoseTrendWrapper(env, history_len=history_len or 4,
                                   terminal_penalty=100.0 if terminal_penalty is None else terminal_penalty,
                                   max_basal=max_basal)
     elif env_version == "v2":
-        env = GlucoseControlWrapper(env, history_len=history_len or 20,
-                                    max_multiplier=max_multiplier,
-                                    reward_scale=reward_scale_for(reward_fun),
-                                    terminal_penalty=terminal_penalty, gamma=gamma)
+        kw = dict(history_len=history_len or 20, max_multiplier=max_multiplier,
+                  reward_scale=reward_scale_for(reward_fun), terminal_penalty=terminal_penalty,
+                  gamma=gamma)
+        env = (ResidualPIDWrapper(env, residual_scale=residual, **kw) if residual
+               else GlucoseControlWrapper(env, **kw))
     else:
         raise ValueError(f"unknown env_version {env_version!r} (use 'v1' or 'v2')")
     return env

@@ -16,6 +16,8 @@ Run from the project root:
     # redesigned env + a stronger off-policy algorithm
     python scripts/train_pooled.py --env-version v2 --algo tqc --tag v2-tqc --seed 0
     python scripts/train_pooled.py --env-version v2 --algo crossq --shield --tag v2-crossq-shield
+    # residual RL: SAC learns corrections on top of the tuned basal PID
+    python scripts/train_pooled.py --env-version v2 --residual 0.5 --tag v2-res-sac --seed 0
 """
 from __future__ import annotations
 
@@ -33,7 +35,7 @@ from stable_baselines3.common.callbacks import BaseCallback, CheckpointCallback,
 from stable_baselines3.common.monitor import Monitor
 from stable_baselines3.common.vec_env import DummyVecEnv, SubprocVecEnv
 
-from diabetes_rl.algos import ALGOS, OFF_POLICY, algo_class, make_model
+from diabetes_rl.algos import ALGOS, OFF_POLICY, algo_class, make_model, zero_init_policy_head
 from diabetes_rl.cohorts import train_val_test_split
 from diabetes_rl.config import env_kwargs
 from diabetes_rl.rewards import REWARD_FUNCTIONS
@@ -129,7 +131,11 @@ def main():
     p.add_argument("--history", type=int, default=None, help="CGM history length (v1: 4, v2: 20)")
     p.add_argument("--terminal-penalty", type=float, default=None,
                    help="v1 default 100 (raw reward units); v2 default 1/(1-gamma) (normalized units)")
-    p.add_argument("--max-multiplier", type=float, default=5.0, help="v2: max dose as a multiple of basal")
+    p.add_argument("--max-multiplier", type=float, default=None,
+                   help="v2: max dose as a multiple of basal (default 5; 8 with --residual, the tuned PID's cap)")
+    p.add_argument("--residual", type=float, default=0.0,
+                   help="v2: residual RL around the tuned basal PID with this residual scale "
+                        "(final action = PID action + scale * agent action; 0 = off)")
     p.add_argument("--shield", action="store_true", help="v2: train with the PLGS safety shield in the loop")
     p.add_argument("--seed", type=int, default=0)
     p.add_argument("--tag", default="default",
@@ -143,6 +149,11 @@ def main():
                    help="subproc = one process per env (fastest for a single run); dummy = all envs "
                         "in-process (far less memory; best when several runs share the CPU)")
     args = p.parse_args()
+
+    if args.residual and args.env_version != "v2":
+        p.error("--residual needs --env-version v2")
+    if args.max_multiplier is None:
+        args.max_multiplier = 8.0 if args.residual else 5.0
 
     out_dir = os.path.join(MODELS_DIR, args.tag)
     os.makedirs(out_dir, exist_ok=True)
@@ -161,7 +172,7 @@ def main():
     cfg = dict(algo=args.algo, env_version=args.env_version, reward=args.reward,
                history=args.history, terminal_penalty=args.terminal_penalty,
                max_multiplier=args.max_multiplier, gamma=args.gamma, shield=args.shield,
-               learning_rate=args.learning_rate, timesteps=args.timesteps, tag=args.tag,
+               residual=args.residual, learning_rate=args.learning_rate, timesteps=args.timesteps, tag=args.tag,
                train_patients=train_patients, val_patients=val_patients, test_patients=test_patients)
     with open(os.path.join(out_dir, "config.json"), "w") as f:
         json.dump(cfg, f, indent=2)
@@ -193,6 +204,8 @@ def main():
     else:
         model = make_model(args.algo, env, seed=args.seed, learning_rate=args.learning_rate,
                            gamma=args.gamma, tensorboard_log=LOGS_DIR)
+        if args.residual:
+            zero_init_policy_head(model)  # untrained agent == the tuned PID
 
     best_dir = os.path.join(out_dir, f"best_seed{args.seed}")
     ckpt_dir = os.path.join(out_dir, "checkpoints")
@@ -209,7 +222,8 @@ def main():
                                         save_buffer=args.algo in OFF_POLICY))
     callbacks.append(eval_cb)
 
-    print(f"\n{args.algo.upper()} [tag={args.tag}, env={args.env_version}]: {args.timesteps:,} steps, "
+    print(f"\n{args.algo.upper()} [tag={args.tag}, env={args.env_version}"
+          f"{f', residual on tuned PID x{args.residual:g}' if args.residual else ''}]: {args.timesteps:,} steps, "
           f"seed {args.seed}, reward={args.reward}, shield={args.shield}. "
           f"Best checkpoint chosen on {len(val_episodes)} fixed validation days.\n")
     t0 = time.time()

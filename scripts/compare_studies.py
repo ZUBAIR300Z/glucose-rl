@@ -48,6 +48,8 @@ TAG_LABELS = {
     "v2-ppo": "PPO, v2 env",
     "v2-rppo": "RecurrentPPO, v2 env",
     "v2-tqc-shield": "TQC, v2 env, shield in training",
+    "v2-res-sac": "Residual SAC on tuned PID (scale 0.5)",
+    "v2-res1-sac": "Residual SAC on tuned PID (scale 1.0)",
 }
 BASELINES = {"pid": "PID (repo)", "bpid": "PID scaled to basal, tuned",
              "basal": "Prescribed basal only", "bb": "Basal-bolus, meals announced*"}

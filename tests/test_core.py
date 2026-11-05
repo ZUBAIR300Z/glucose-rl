@@ -221,3 +221,61 @@ def test_v2_shield_blocks_an_overdose_when_glucose_is_low():
             break
         assert not term
     assert suspended
+
+
+# ---------------------------------------------------------------- residual RL
+def test_multiplier_to_action_inverts_action_to_multiplier():
+    from diabetes_rl.wrappers import multiplier_to_action
+    for m in (0.0, 0.3, 1.0, 2.5, 8.0):
+        assert action_to_multiplier(multiplier_to_action(m, 8.0), 8.0) == pytest.approx(m)
+    assert multiplier_to_action(12.0, 8.0) == 1.0 and multiplier_to_action(-1.0, 8.0) == -1.0
+
+
+def test_residual_zero_action_reproduces_the_tuned_pid():
+    """Agent action 0 = no correction: the BG trace equals the plain tuned PID's."""
+    from diabetes_rl.baselines import BasalPIDController
+    from diabetes_rl.wrappers import ResidualPIDWrapper
+    patient, seed, n = "adult#005", 1, 120
+    raw = make_env(env_id=_id(), patient_name=patient, env_seed=seed)
+    pid = BasalPIDController(patient)
+    obs, _ = raw.reset()
+    pid_bg = []
+    for _ in range(n):
+        obs, *_rest, info = raw.step(pid.act(float(obs[0])))
+        pid_bg.append(info["bg"])
+    env = make_glucose_env(_id(), patient_name=patient, env_seed=seed, env_version="v2",
+                           reward_fun=REWARD_FUNCTIONS["magni"], residual=0.5, max_multiplier=8.0)
+    assert isinstance(env, ResidualPIDWrapper)
+    obs, _ = env.reset()
+    res_bg = []
+    for _ in range(n):
+        obs, r, term, trunc, info = env.step(np.zeros(1, np.float32))
+        res_bg.append(info["bg"])
+        assert info["final_action"] == pytest.approx(info["pid_action"])
+    assert np.allclose(res_bg, pid_bg, rtol=1e-4)
+    assert env.observation_space.contains(obs)
+    assert obs.shape[0] == GlucoseControlWrapper.N_INSULIN_HIST + 20 + 4 + 2  # v2 obs + 2 PID features
+
+
+def test_residual_scale_bounds_the_correction():
+    env = make_glucose_env(_id(), patient_name="child#008", env_seed=0, env_version="v2",
+                           reward_fun=REWARD_FUNCTIONS["magni"], residual=0.25, max_multiplier=8.0)
+    env.reset()
+    for a in (1.0, -1.0, 0.4):
+        _, _, _, _, info = env.step(np.array([a], np.float32))
+        expected = float(np.clip(info["pid_action"] + 0.25 * a, -1, 1))
+        assert info["final_action"] == pytest.approx(expected)
+
+
+def test_zero_init_policy_head_makes_the_untrained_agent_output_zero():
+    from diabetes_rl.algos import make_model, zero_init_policy_head
+    env = make_glucose_env(_id(), patient_name="child#008", env_seed=0, env_version="v2",
+                           reward_fun=REWARD_FUNCTIONS["magni"], residual=0.5, max_multiplier=8.0)
+    for algo in ("sac", "td3", "ppo"):
+        model = make_model(algo, env, verbose=0)
+        zero_init_policy_head(model)
+        obs, _ = env.reset()
+        for _ in range(3):
+            a, _ = model.predict(obs, deterministic=True)
+            assert float(np.abs(a).max()) < 1e-6, algo
+            obs, *_ = env.step(np.array([0.7], np.float32))
